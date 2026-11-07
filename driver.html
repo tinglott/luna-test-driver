@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARTISY AI Receptionist — Test Driver</title>
+<style>
+  :root { --navy:#0a0e1a; --card:#151d36; --white:#eef1f8; --gold:#f5c451; --sky:#7fd4ff; --mist:#9aa3c0; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--navy); color:var(--white); }
+  .wrap { max-width:860px; margin:0 auto; padding:18px 16px 60px; }
+  h1 { font-size:1.35rem; margin:6px 0 2px; }
+  h2 { font-size:1.05rem; margin:22px 0 8px; color:var(--gold); }
+  p, li { line-height:1.5; }
+  .banner { background:var(--card); border:1px solid var(--gold); border-radius:10px; padding:12px 14px; margin:12px 0; }
+  .banner b { color:var(--gold); }
+  .card { background:var(--card); border:1px solid #26305a; border-radius:10px; padding:14px; margin:12px 0; }
+  label { display:block; font-size:.85rem; color:var(--mist); margin:10px 0 4px; }
+  input, select, textarea { width:100%; padding:9px 10px; border-radius:8px; border:1px solid #33406e; background:#0d1328; color:var(--white); font-size:1rem; }
+  button { background:var(--gold); color:#111; border:0; border-radius:8px; padding:10px 16px; font-size:1rem; font-weight:600; cursor:pointer; margin:6px 6px 6px 0; }
+  button.secondary { background:#26305a; color:var(--white); }
+  button.danger { background:#7a2e2e; color:#fff; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; }
+  .row > * { flex:1; min-width:160px; }
+  .log { background:#0d1328; border:1px solid #26305a; border-radius:8px; padding:10px 12px; max-height:320px; overflow:auto; font-size:.95rem; }
+  .log .caller { color:var(--sky); }
+  .log .agent { color:var(--gold); }
+  .log .sys { color:var(--mist); font-style:italic; }
+  .log p { margin:6px 0; }
+  pre { background:#0d1328; border:1px solid #26305a; border-radius:8px; padding:10px; overflow:auto; font-size:.82rem; white-space:pre-wrap; }
+  .pill { display:inline-block; background:#26305a; border-radius:999px; padding:2px 10px; font-size:.8rem; margin:2px 4px 2px 0; }
+  .ok { color:#8be28b; } .bad { color:#ff9a9a; }
+  .small { font-size:.85rem; color:var(--mist); }
+  #recState { font-weight:700; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🤖 ARTISY AI Receptionist — Test Driver</h1>
+  <p class="small">A working test of the AI receptionist service. No login, no account, no setup — just test it and tell us what broke.</p>
+
+  <div class="banner">
+    <b>Disclosure, first — always.</b> You are talking to an <b>AI receptionist</b>, not a person.
+    Every test call opens by saying it is AI. Every test call-back opens with:
+    <i>“Hi, this is the AI receptionist for Test Dental Practice, returning your call about [your reason]. Say stop at any time and we will never call you again.”</i>
+    Say <b>“stop”</b> at any time and it will end the call and never call you again.
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">1 · Who is testing?</h2>
+    <label for="tester">Your name or label — so we can see who tried it and what failed</label>
+    <input id="tester" type="text" placeholder="e.g. Eliane" autocomplete="off">
+    <p class="small">Your test calls are logged under this name (what you did, what broke). Nothing else about you is recorded. You can also open this page with <code>?tester=YourName</code> in the link. This test link is for invited affiliate testers only — if your name is not on the invite list, the page will not start a call.</p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">2 · Start a test call</h2>
+    <p class="small">Fictional business: <b>Test Dental Practice</b> (Mon–Fri 9am–5pm). Services: Check-up $45 · Hygiene Cleaning $89 · Emergency Visit (escalates to a human). Try: <i>“How much is a check-up?”</i> · <i>“I want to book a check-up on Monday at 10am”</i> · <i>“I feel like hurting myself”</i> (crisis — it must give 988) · <i>“stop”</i> (opt-out).</p>
+    <div class="row">
+      <div>
+        <label for="scenario">Scenario</label>
+        <select id="scenario">
+          <option value="inbound">Inbound call — front desk</option>
+          <option value="sales">Sales call — ask about buying</option>
+          <option value="newcaller">Inbound call — first-time caller (needs owner approval to book)</option>
+        </select>
+      </div>
+      <div>
+        <label for="callerName">Your name (as the caller)</label>
+        <input id="callerName" type="text" placeholder="Test Caller" autocomplete="off">
+      </div>
+      <div>
+        <label for="callerPhone">Your phone (test number is fine)</label>
+        <input id="callerPhone" type="tel" placeholder="+1 555 010 0000" autocomplete="off">
+      </div>
+    </div>
+    <button id="startBtn">Start test call</button>
+    <button id="endBtn" class="danger" disabled>End call</button>
+    <span id="callState" class="small"></span>
+  </div>
+
+  <div class="card" id="callCard" class="hidden">
+    <h2 style="margin-top:0">3 · Talk to the receptionist</h2>
+    <div class="log" id="transcript"><p class="sys">Start a test call above.</p></div>
+    <div class="row" style="margin-top:10px">
+      <div style="flex:2">
+        <label for="msgText">Type a message</label>
+        <input id="msgText" type="text" placeholder="Type here, or use the microphone…" autocomplete="off">
+      </div>
+    </div>
+    <button id="sendBtn" disabled>Send</button>
+    <button id="micBtn" class="secondary" disabled>🎤 Hold to talk</button>
+    <span id="recState" class="small"></span>
+    <div id="bookingBox" class="banner hidden" style="border-color:var(--sky)">
+      <b>Booking ready to confirm:</b> <span id="bookingText"></span><br>
+      <button id="confirmBtn">Yes, book it</button>
+      <button id="cancelBookingBtn" class="secondary">No, cancel</button>
+      <p class="small">The receptionist only books after you confirm. Test bookings are real calendar events — and they are <b>deleted automatically when your test call ends</b>.</p>
+    </div>
+    <div id="approvalBox" class="banner hidden">
+      <b>Owner approval needed:</b> <span id="approvalText"></span><br>
+      <span class="small">First-time callers cannot book directly — the owner approves below (section 5).</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">4 · Test a call-back (with disclosure)</h2>
+    <p class="small">Missed a call? The receptionist calls back inside 8am–9pm, opens with the disclosure above, and stops forever if you say “stop”.</p>
+    <div class="row">
+      <div><label for="cbName">Name</label><input id="cbName" type="text" placeholder="Test Caller"></div>
+      <div><label for="cbPhone">Phone</label><input id="cbPhone" type="tel" placeholder="+1 555 010 0000"></div>
+      <div><label for="cbReason">What was the call about?</label><input id="cbReason" type="text" placeholder="a check-up booking"></div>
+    </div>
+    <button id="cbReqBtn">Request a call-back</button>
+    <button id="cbSweepBtn" class="secondary">Run the call-back sweep</button>
+    <div id="cbResults" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">5 · Walk-ins &amp; owner approvals</h2>
+    <div class="row">
+      <div><label for="wiName">Walk-in name</label><input id="wiName" type="text" placeholder="Walk-in One"></div>
+      <div><label for="wiService">Service</label><input id="wiService" type="text" placeholder="Check-up"></div>
+    </div>
+    <button id="wiAddBtn" class="secondary">Add walk-in</button>
+    <button id="wiServeBtn" class="secondary">Serve next walk-in</button>
+    <button id="apprRefreshBtn" class="secondary">Refresh approvals</button>
+    <div id="wiStatus" style="margin-top:8px"></div>
+    <div id="apprList" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">6 · What happened on the call</h2>
+    <p class="small">When you end a call, the owner summary (the email the business owner would get) and the call record appear here.</p>
+    <div id="summaryBox"></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">7 · Found something broken?</h2>
+    <p class="small"><b>Our promise: fixes are free of charge during the 14-day trial.</b> Tell us what broke and we fix it — this report goes straight into the test log under your name.</p>
+    <textarea id="feedbackText" rows="3" placeholder="What broke, or what felt wrong?"></textarea>
+    <button id="feedbackBtn" class="secondary">Send feedback</button>
+    <span id="feedbackState" class="small"></span>
+  </div>
+
+  <p class="small">Test system only. The business is fictional; no real customer data is used. Test bookings are created on a test calendar and deleted when your call ends. If anything here looks wrong, say so — that is the point of the test.</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let sessionId = null, audioEl = null, mediaRecorder = null, recChunks = [];
+
+function tester() {
+  const v = ($('tester').value || '').trim();
+  return v || 'anonymous';
+}
+function headers() { return { 'Content-Type': 'application/json', 'X-Tester': tester() }; }
+async function api(path, body, method) {
+  const res = await fetch(path, { method: method || (body ? 'POST' : 'GET'),
+    headers: headers(), body: body ? JSON.stringify({ ...body, tester: tester() }) : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+function playAudio(url) {
+  // Vercel build: url is a data:audio/wav;base64,... URI from the
+  // turn JSON (Groq Orpheus) — played from memory, no /audio route.
+  if (!url) return;
+  if (audioEl) { audioEl.pause(); }
+  audioEl = new Audio(url);
+  audioEl.play().catch(() => { /* browser may need a tap first; text is shown anyway */ });
+}
+function addLine(cls, who, text) {
+  const log = $('transcript');
+  if (log.querySelector('.sys') && log.children.length === 1) log.innerHTML = '';
+  const p = document.createElement('p');
+  p.className = cls; p.innerHTML = '<b>' + who + ':</b> ' + escapeHtml(text);
+  log.appendChild(p); log.scrollTop = log.scrollHeight;
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// Tester name: ?tester= (or ?t=) pre-fills, then localStorage remembers.
+(function initTester() {
+  const params = new URLSearchParams(location.search);
+  const fromLink = params.get('tester') || params.get('t');
+  const saved = localStorage.getItem('artisy-tester');
+  $('tester').value = fromLink || saved || '';
+  $('tester').addEventListener('change', () => localStorage.setItem('artisy-tester', $('tester').value.trim()));
+})();
+
+$('startBtn').onclick = async () => {
+  const scenarioSel = $('scenario').value;
+  const body = {
+    scenario: scenarioSel === 'newcaller' ? 'inbound' : scenarioSel,
+    caller_name: $('callerName').value.trim() || 'Test Caller',
+    caller_phone: $('callerPhone').value.trim() || '+1 555 010 0000',
+    caller_is_new: scenarioSel === 'newcaller'
+  };
+  $('startBtn').disabled = true;
+  try {
+    const data = await api('/api/session/start', body);
+    sessionId = data.session_id;
+    $('callCard').classList.remove('hidden');
+    $('transcript').innerHTML = '';
+    addLine('agent', 'AI Receptionist', data.greeting);
+    playAudio(data.audio_data);
+    $('callState').textContent = 'Call live — ' + data.business + ' (' + data.scenario + ')';
+    $('endBtn').disabled = false; $('sendBtn').disabled = false; $('micBtn').disabled = false;
+  } catch (e) { alert('Could not start the test call: ' + e.message); $('startBtn').disabled = false; }
+};
+
+$('endBtn').onclick = async () => {
+  if (!sessionId) return;
+  try {
+    const data = await api('/api/session/end', { session_id: sessionId });
+    const s = data.summary;
+    $('summaryBox').innerHTML =
+      '<p><b>Owner summary</b> — subject: ' + escapeHtml(s.subject) + '</p><pre>' + escapeHtml(s.body) + '</pre>' +
+      '<p class="small">Call record posted to the test log (status ' + data.post_status + '). Test bookings deleted: ' +
+      (data.deleted_bookings.length ? data.deleted_bookings.join(', ') : 'none') + '.</p>' +
+      '<details><summary class="small">Raw call record</summary><pre>' + escapeHtml(JSON.stringify(data.payload, null, 2)) + '</pre></details>';
+    addLine('sys', 'System', 'Call ended. Test bookings deleted: ' + (data.deleted_bookings.length || 'none') + '.');
+  } catch (e) { alert('Could not end the call cleanly: ' + e.message); }
+  sessionId = null;
+  $('endBtn').disabled = true; $('sendBtn').disabled = true; $('micBtn').disabled = true; $('startBtn').disabled = false;
+  $('callState').textContent = '';
+};
+
+async function sendTurn(text) {
+  if (!sessionId || !text) return;
+  addLine('caller', 'You', text);
+  $('msgText').value = '';
+  try {
+    const data = await api('/api/session/turn', { session_id: sessionId, text });
+    addLine('agent', 'AI Receptionist', data.reply);
+    playAudio(data.audio_data);
+    if (data.pending_booking) {
+      const p = data.pending_booking;
+      $('bookingText').textContent = p.service + ' — ' + new Date(p.start).toLocaleString() + ' to ' + new Date(p.end).toLocaleTimeString();
+      $('bookingBox').classList.remove('hidden');
+    } else { $('bookingBox').classList.add('hidden'); }
+    if (data.approval_item) {
+      $('approvalText').textContent = data.approval_item.service + ' — ' + data.approval_item.caller_name + ' (' + data.approval_item.start + ')';
+      $('approvalBox').classList.remove('hidden');
+      refreshApprovals();
+    }
+    if (data.action === 'opt_out') addLine('sys', 'System', 'You opted out — your number was added to the do-not-call list.');
+  } catch (e) { addLine('sys', 'System', 'Error: ' + e.message); }
+}
+
+$('sendBtn').onclick = () => sendTurn($('msgText').value.trim());
+$('msgText').addEventListener('keydown', e => { if (e.key === 'Enter') sendTurn($('msgText').value.trim()); });
+
+$('confirmBtn').onclick = async () => {
+  if (!sessionId) return;
+  try {
+    const data = await api('/api/session/confirm', { session_id: sessionId });
+    addLine('agent', 'AI Receptionist', data.reply);
+    playAudio(data.audio_data);
+    addLine('sys', 'System', 'Booked: ' + data.service + ' at ' + new Date(data.start).toLocaleString() + ' (event ' + data.event_id + '). It will be deleted when the call ends.');
+    $('bookingBox').classList.add('hidden');
+  } catch (e) { alert('Booking failed: ' + e.message); }
+};
+$('cancelBookingBtn').onclick = () => { $('bookingBox').classList.add('hidden'); addLine('sys', 'System', 'Booking cancelled — no appointment was made.'); };
+
+// Microphone: hold to talk, release to send.
+$('micBtn').addEventListener('pointerdown', async e => {
+  e.preventDefault();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = ev => recChunks.push(ev.data);
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      $('recState').textContent = 'Transcribing…';
+      const blob = new Blob(recChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+      const fd = new FormData(); fd.append('audio', blob, 'voice.webm');
+      try {
+        const res = await fetch('/api/session/transcribe', { method: 'POST', headers: { 'X-Tester': tester() }, body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'transcription failed');
+        $('recState').textContent = '';
+        if (data.text) sendTurn(data.text);
+      } catch (err) { $('recState').textContent = 'Transcription failed: ' + err.message; }
+    };
+    mediaRecorder.start();
+    $('recState').textContent = '● Recording — release to send';
+  } catch (err) { $('recState').textContent = 'Microphone unavailable: ' + err.message + ' — type instead.'; }
+});
+$('micBtn').addEventListener('pointerup', () => { if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop(); });
+$('micBtn').addEventListener('pointerleave', () => { if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop(); });
+
+// Call-backs
+$('cbReqBtn').onclick = async () => {
+  try {
+    const item = await api('/api/callback/request', {
+      caller_name: $('cbName').value.trim() || 'Test Caller',
+      caller_phone: $('cbPhone').value.trim() || '+1 555 010 0000',
+      reason: $('cbReason').value.trim() || 'a check-up booking' });
+    $('cbResults').innerHTML = '<p>Call-back requested: <b>' + escapeHtml(item.id) + '</b> — ' + escapeHtml(item.status) + ' (reason: ' + escapeHtml(item.reason || 'none') + '). Now run the sweep.</p>';
+  } catch (e) { alert('Call-back request failed: ' + e.message); }
+};
+$('cbSweepBtn').onclick = async () => {
+  try {
+    const data = await api('/api/callback/sweep', {});
+    let html = '<p><b>Sweep results</b> (' + escapeHtml(data.now_local) + ', recipient time zone ' + escapeHtml(data.recipient_tz) + '):</p><ul>';
+    data.results.forEach(r => { html += '<li>' + escapeHtml(r.id || '') + ' — ' + escapeHtml(r.action || r.status || '') + '</li>'; });
+    html += '</ul>';
+    data.opened_sessions.forEach(s => {
+      html += '<p>📞 Call-back placed — <button class="secondary" onclick="answerCallback(\'' + s.session_id + '\', ' + JSON.stringify(s.greeting).replace(/'/g, "\\'") + ', ' + JSON.stringify(s.audio_data || '') + ')">Answer it</button></p>';
+    });
+    $('cbResults').innerHTML = html;
+  } catch (e) { alert('Sweep failed: ' + e.message); }
+};
+window.answerCallback = (id, greeting, audioUrl) => {
+  sessionId = id;
+  $('callCard').classList.remove('hidden');
+  $('transcript').innerHTML = '';
+  addLine('agent', 'AI Receptionist (calling you back)', greeting);
+  playAudio(audioUrl);
+  $('endBtn').disabled = false; $('sendBtn').disabled = false; $('micBtn').disabled = false; $('startBtn').disabled = true;
+  $('callState').textContent = 'Call-back live — try saying “stop”.';
+};
+
+// Walk-ins & approvals
+$('wiAddBtn').onclick = async () => {
+  try { await api('/api/walkin/add', { name: $('wiName').value.trim() || 'Walk-in One', service: $('wiService').value.trim() || 'Check-up' }); refreshWalkins(); }
+  catch (e) { alert('Walk-in failed: ' + e.message); }
+};
+$('wiServeBtn').onclick = async () => { try { await api('/api/walkin/serve', {}); refreshWalkins(); } catch (e) { alert(e.message); } };
+async function refreshWalkins() {
+  try {
+    const list = await api('/api/walkin/status', null, 'GET');
+    $('wiStatus').innerHTML = list.length
+      ? '<p>' + list.map(w => escapeHtml(w.name) + ' — position ' + w.position + ', ~' + w.estimated_wait_minutes + ' min').join('<br>') + '</p>'
+      : '<p class="small">Walk-in queue is empty.</p>';
+  } catch (e) { $('wiStatus').innerHTML = ''; }
+}
+async function refreshApprovals() {
+  try {
+    const list = await api('/api/approval/pending', null, 'GET');
+    $('apprList').innerHTML = list.length
+      ? '<p><b>Pending owner approvals:</b></p>' + list.map(a =>
+          '<p>' + escapeHtml(a.service) + ' — ' + escapeHtml(a.caller_name) + ' (' + escapeHtml(a.start) + ') ' +
+          '<button class="secondary" onclick="decideApproval(\'' + a.id + '\', true)">Approve</button> ' +
+          '<button class="danger" onclick="decideApproval(\'' + a.id + '\', false)">Deny</button></p>').join('')
+      : '<p class="small">No pending approvals.</p>';
+  } catch (e) { $('apprList').innerHTML = ''; }
+}
+window.decideApproval = async (id, ok) => {
+  try {
+    const item = await api(ok ? '/api/approval/approve' : '/api/approval/deny', { item_id: id });
+    alert(ok ? ('Approved — real calendar event ' + item.booking_event_id) : 'Denied — nothing was booked.');
+    refreshApprovals();
+  } catch (e) { alert('Approval failed: ' + e.message); }
+};
+$('apprRefreshBtn').onclick = refreshApprovals;
+
+// Feedback
+$('feedbackBtn').onclick = async () => {
+  const text = $('feedbackText').value.trim();
+  if (!text) return;
+  try {
+    await api('/api/feedback', { text, session_id: sessionId });
+    $('feedbackState').textContent = 'Logged — thank you. Fixes are free during the trial.';
+    $('feedbackText').value = '';
+  } catch (e) { $('feedbackState').textContent = 'Could not log feedback: ' + e.message; }
+};
+
+refreshWalkins(); refreshApprovals();
+</script>
+</body>
+</html>

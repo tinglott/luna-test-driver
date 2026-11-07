@@ -1,0 +1,429 @@
+{
+ "$id": "https://artistrystore.com/schemas/role-config.schema.json",
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "description": "One JSON file per client per role (DESIGN.md section 9). The voice agent validates every config against this schema at call start and fails closed to message-taking if it is invalid. No secrets ever belong in a role config.",
+ "if": {
+  "properties": {
+   "allowedTools": {
+    "contains": {
+     "const": "calendar.createEvent"
+    }
+   }
+  },
+  "required": [
+   "allowedTools"
+  ]
+ },
+ "properties": {
+  "allowedTools": {
+   "items": {
+    "enum": [
+     "calendar.freeBusy",
+     "calendar.createEvent",
+     "message.take",
+     "knowledge.lookup"
+    ],
+    "type": "string"
+   },
+   "minItems": 1,
+   "type": "array"
+  },
+  "bookingRules": {
+   "properties": {
+    "bufferMinutes": {
+     "description": "Minutes of buffer around every generated slot (Appendix H: 15). Availability is checked over start-buffer to end+buffer.",
+     "maximum": 60,
+     "minimum": 0,
+     "type": "integer"
+    },
+    "calendarId": {
+     "type": "string"
+    },
+    "confirmByRepeating": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "emergencyRule": {
+     "type": "string"
+    },
+    "neverBookOutsideHours": {
+     "type": "boolean"
+    },
+    "newClientBookingsRequireApproval": {
+     "description": "Appendix H: when true, a first-time caller is booked provisionally only — the booking waits in the owner-approval queue until the owner approves it (real calendar write on approval).",
+     "type": "boolean"
+    },
+    "requireCallerConfirmation": {
+     "type": "boolean"
+    },
+    "slotLengthMinutes": {
+     "minimum": 5,
+     "type": "integer"
+    },
+    "staff": {
+     "description": "Appendix I: per-staff slot availability. A slot is free only if THAT staff member is free. Each entry names the staff member and their calendar. Implementation of the per-staff check is a follow-up build item (see REPORT.md); the data shape is reserved here so configs written now stay valid.",
+     "items": {
+      "properties": {
+       "calendarId": {
+        "type": "string"
+       },
+       "name": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "name"
+      ],
+      "type": "object"
+     },
+     "type": "array"
+    }
+   },
+   "type": "object"
+  },
+  "business": {
+   "properties": {
+    "hours": {
+     "type": "string"
+    },
+    "name": {
+     "type": "string"
+    },
+    "phone": {
+     "type": "string"
+    },
+    "services": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    }
+   },
+   "type": "object"
+  },
+  "clientId": {
+   "minLength": 1,
+   "type": "string"
+  },
+  "department": {
+   "minLength": 1,
+   "type": "string"
+  },
+  "employee": {
+   "minLength": 1,
+   "type": "string"
+  },
+  "escalationPaths": {
+   "items": {
+    "properties": {
+     "action": {
+      "type": "string"
+     },
+     "note": {
+      "type": "string"
+     },
+     "notify": {
+      "type": "string"
+     },
+     "ownerPhone": {
+      "type": "string"
+     },
+     "trigger": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "trigger",
+     "action",
+     "notify"
+    ],
+    "type": "object"
+   },
+   "minItems": 1,
+   "type": "array"
+  },
+  "followUp": {
+   "description": "Sales door (DESIGN.md section 10): when a call on a sales role qualifies as a sales lead, the follow-up task is due the next business day at dueTime in timezone. Optional; only sales roles carry it. The follow-up is a task for the owner, never a promise to the caller.",
+   "properties": {
+    "dueNextBusinessDay": {
+     "type": "boolean"
+    },
+    "dueTime": {
+     "pattern": "^[0-9]{2}:[0-9]{2}$",
+     "type": "string"
+    },
+    "note": {
+     "type": "string"
+    },
+    "timezone": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "dueNextBusinessDay",
+    "dueTime",
+    "timezone"
+   ],
+   "type": "object"
+  },
+  "greeting": {
+   "minLength": 1,
+   "type": "string"
+  },
+  "hardGates": {
+   "properties": {
+    "crisis": {
+     "properties": {
+      "keywords": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      "note": {
+       "type": "string"
+      },
+      "response": {
+       "minLength": 1,
+       "type": "string"
+      }
+     },
+     "required": [
+      "response"
+     ],
+     "type": "object"
+    },
+    "fallback": {
+     "properties": {
+      "messageTaking": {
+       "type": "string"
+      },
+      "systemDown": {
+       "type": "string"
+      }
+     },
+     "type": "object"
+    },
+    "never": {
+     "items": {
+      "type": "string"
+     },
+     "minItems": 1,
+     "type": "array"
+    },
+    "unknownAnswer": {
+     "type": "string"
+    }
+   },
+   "required": [
+    "never",
+    "crisis"
+   ],
+   "type": "object"
+  },
+  "knowledge": {
+   "items": {
+    "properties": {
+     "a": {
+      "type": "string"
+     },
+     "q": {
+      "type": "string"
+     },
+     "verified": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "q",
+     "a"
+    ],
+    "type": "object"
+   },
+   "type": "array"
+  },
+  "knowledgeSources": {
+   "items": {
+    "properties": {
+     "chunkIds": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "clientId": {
+      "type": "string"
+     },
+     "note": {
+      "type": "string"
+     },
+     "roleId": {
+      "type": "string"
+     },
+     "table": {
+      "type": "string"
+     },
+     "type": {
+      "type": "string"
+     }
+    },
+    "type": "object"
+   },
+   "type": "array"
+  },
+  "language": {
+   "minLength": 2,
+   "type": "string"
+  },
+  "lastVerified": {
+   "type": "string"
+  },
+  "ownerSummary": {
+   "properties": {
+    "afterEveryCall": {
+     "type": "boolean"
+    },
+    "include": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    },
+    "to": {
+     "type": "string"
+    }
+   },
+   "type": "object"
+  },
+  "persona": {
+   "description": "Persona-as-config (DESIGN.md Appendix I, Sacred Renewal paste): the voice assistant as one object — name, role, traits, scripted replies per scenario. Optional; when present, scripted replies are used verbatim for their scenario before the brain is consulted.",
+   "properties": {
+    "name": {
+     "type": "string"
+    },
+    "responses": {
+     "properties": {
+      "bookingConfirm": {
+       "type": "string"
+      },
+      "cancel": {
+       "type": "string"
+      },
+      "fullyBooked": {
+       "type": "string"
+      },
+      "greeting": {
+       "type": "string"
+      },
+      "services": {
+       "type": "string"
+      },
+      "waitlistJoin": {
+       "type": "string"
+      },
+      "callbackGreeting": {
+       "type": "string",
+       "description": "Callback opening (DISCLAIMER.md Part A). Spoken verbatim as the first thing on every outbound call-back, before anything else. Placeholders: {business} (business name), {reason} (what the caller called about). Must carry the AI disclosure + the opt-out line."
+      },
+      "farewell": {
+       "type": "string",
+       "description": "Normal close for a call-back, spoken at the end of the call."
+      }
+     },
+     "type": "object"
+    },
+    "role": {
+     "type": "string"
+    },
+    "traits": {
+     "items": {
+      "type": "string"
+     },
+     "type": "array"
+    }
+   },
+   "required": [
+    "name",
+    "role"
+   ],
+   "type": "object"
+  },
+  "roleId": {
+   "minLength": 1,
+   "type": "string"
+  },
+  "sop": {
+   "minLength": 1,
+   "type": "string"
+  },
+  "tone": {
+   "minLength": 1,
+   "type": "string"
+  },
+  "verifiedBy": {
+   "type": "string"
+  },
+  "version": {
+   "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+   "type": "string"
+  },
+  "voice": {
+   "description": "Voice/personality picker (DESIGN.md Appendix F): a config UI over tone. Optional. Kokoro voice id plus speed/pitch/warmth; the picker never changes gates, tools, or knowledge.",
+   "properties": {
+    "pitch": {
+     "maximum": 1.5,
+     "minimum": 0.5,
+     "type": "number"
+    },
+    "speed": {
+     "maximum": 1.5,
+     "minimum": 0.5,
+     "type": "number"
+    },
+    "voiceId": {
+     "type": "string"
+    },
+    "warmth": {
+     "maximum": 1,
+     "minimum": 0,
+     "type": "number"
+    }
+   },
+   "type": "object"
+  }
+ },
+ "required": [
+  "roleId",
+  "clientId",
+  "version",
+  "department",
+  "employee",
+  "sop",
+  "tone",
+  "greeting",
+  "allowedTools",
+  "escalationPaths",
+  "hardGates"
+ ],
+ "then": {
+  "properties": {
+   "bookingRules": {
+    "properties": {
+     "requireCallerConfirmation": {
+      "const": true
+     }
+    },
+    "required": [
+     "requireCallerConfirmation"
+    ]
+   }
+  },
+  "required": [
+   "bookingRules"
+  ]
+ },
+ "title": "AI Receptionist role config",
+ "type": "object"
+}
