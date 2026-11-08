@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0e1a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="https://luna-test-driver.vercel.app/icon-192.png">
+<title>Luna — ARTISY AI Receptionist (Test)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>🤖 Luna — ARTISY AI Receptionist</h1>
+  <p class="small">A working test of the AI receptionist service. No login, no account, no setup — just test it and tell us what broke.</p>
+
+  <nav class="pages">
+    <a href="index.html" class="current">Home</a>
+    <a href="talk.html">Talk to Luna</a>
+    <a href="calendar.html">Calendar</a>
+    <a href="callback.html">Call-backs</a>
+    <a href="desk.html">Front desk</a>
+  </nav>
+
+  <div class="banner">
+    <b>Disclosure, first — always.</b> You are talking to an <b>AI receptionist</b>, not a person.
+    Every test call opens by saying it is AI. Every test call-back opens with:
+    <i>“Hi, this is the AI receptionist for Test Dental Practice, returning your call about [your reason]. Say stop at any time and we will never call you again.”</i>
+    Say <b>“stop”</b> at any time and it will end the call and never call you again.
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Who is testing?</h2>
+    <label for="tester">Your name or label — so we can see who tried it and what failed</label>
+    <input id="tester" type="text" placeholder="e.g. Eliane" autocomplete="off">
+    <p class="small">Your test calls are logged under this name (what you did, what broke). Nothing else about you is recorded. You can also open this page with <code>?tester=YourName</code> in the link. This test is for invited affiliate testers only — if your name is not on the invite list, the pages will not start a call.</p>
+    <p class="small">Your name is remembered on this device and carried to every page.</p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">What to test</h2>
+    <p><b><a href="talk.html">Talk to Luna</a></b> — start a test call with the fictional Test Dental Practice and talk to the receptionist by typing or by voice. Try: <i>“How much is a check-up?”</i> · <i>“I want to book a check-up on Monday at 10am”</i> · <i>“I feel like hurting myself”</i> (crisis — it must give 988) · <i>“stop”</i> (opt-out).</p>
+    <p><b><a href="calendar.html">Calendar</a></b> — see whether the test calendar is connected, and how the owner connects it with one tap. Test bookings are real calendar events — and they are deleted automatically when your test call ends.</p>
+    <p><b><a href="callback.html">Call-backs</a></b> — request a call-back, run the sweep, and answer it when the receptionist calls back inside 8am–9pm.</p>
+    <p><b><a href="desk.html">Front desk</a></b> — walk-ins (add / serve next) and owner approvals for first-time callers.</p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Install on your phone</h2>
+    <p class="small">This site installs like an app: in Chrome, tap the menu (⋮) → <b>Install app</b> (or <b>Add to Home screen</b>). The test driver behind it is the same Luna backend — the pages call it over the internet, so testing works anywhere you have signal.</p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Found something broken?</h2>
+    <p class="small"><b>Our promise: fixes are free of charge during the 14-day trial.</b> Tell us what broke and we fix it — this report goes straight into the test log under your name.</p>
+    <textarea id="feedbackText" rows="3" placeholder="What broke, or what felt wrong?"></textarea>
+    <button id="feedbackBtn" class="secondary">Send feedback</button>
+    <span id="feedbackState" class="small"></span>
+  </div>
+
+  <p class="small" id="healthLine">Backend: checking…</p>
+  <p class="small">Test system only. The business is fictional; no real customer data is used. Test bookings are created on a test calendar and deleted when your call ends. If anything here looks wrong, say so — that is the point of the test.</p>
+</div>
+<script src="api-config.js"></script>
+<script>
+initTester();
+showBackendHealth('healthLine');
+$('feedbackBtn').onclick = async () => {
+  const text = $('feedbackText').value.trim();
+  if (!text) return;
+  try {
+    await api('/api/feedback', { text });
+    $('feedbackState').textContent = 'Logged — thank you. Fixes are free during the trial.';
+    $('feedbackText').value = '';
+  } catch (e) { $('feedbackState').textContent = 'Could not log feedback: ' + e.message; }
+};
+</script>
+</body>
+</html>

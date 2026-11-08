@@ -1,16 +1,20 @@
-/* Luna service worker — PWA shell cache, modelled on Willow Tales.
+/* Luna Pages service worker — shell cache only, modelled on Willow Tales.
  *
  * Rules (do not weaken):
- *  - /api/* is NETWORK-ONLY. Never cache API calls or auth state —
- *    a cached turn, booking or calendar status would be stale at
- *    best and a wrong booking at worst.
- *  - App shell + icons/manifest are network-first with a cache
- *    fallback, so the page still opens when the connection drops.
- *  - The worker itself is served with Cache-Control: no-cache (see
- *    index.py), so an updated worker is picked up on the next visit.
+ *  - API calls are NEVER intercepted. The pages call the Python backend
+ *    cross-origin; this worker only handles same-origin shell requests.
+ *    A cached turn, booking or calendar status would be stale at best
+ *    and a wrong booking at worst — so the worker never touches them.
+ *  - App shell is network-first with a cache fallback, so the pages
+ *    still open when the connection drops.
+ *  - The worker itself is served with Cache-Control: no-cache by
+ *    GitHub Pages defaults for sw.js? No — Pages does not set that, so
+ *    the worker version in CACHE is bumped on every change instead.
  */
-const CACHE = "luna-driver-v1";
-const CORE = ["/", "/manifest.json", "/icon-192.png", "/icon-512.png"];
+const CACHE = "luna-pages-v1";
+const CORE = ["./", "./index.html", "./talk.html", "./calendar.html",
+  "./callback.html", "./desk.html", "./style.css", "./api-config.js",
+  "./manifest.json"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
@@ -24,19 +28,17 @@ self.addEventListener("activate", e => {
 
 self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
-  // API calls and auth state: network only, never cached, never served stale.
-  if (url.pathname.startsWith("/api/") || url.pathname === "/authorize"
-      || url.pathname === "/oauth2callback") {
-    return; // no respondWith — the request goes to the network as-is.
-  }
-  // Everything else: network-first, cache fallback.
+  // Only same-origin shell requests. Everything else (including every
+  // call to the Python backend) goes to the network untouched.
+  if (url.origin !== self.location.origin) return;
+  if (e.request.method !== "GET") return;
   e.respondWith(
     fetch(e.request).then(res => {
-      if (e.request.method === "GET" && res.ok) {
+      if (res.ok) {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy));
       }
       return res;
-    }).catch(() => caches.match(e.request).then(hit => hit || caches.match("/")))
+    }).catch(() => caches.match(e.request).then(hit => hit || caches.match("./index.html")))
   );
 });

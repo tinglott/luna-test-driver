@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0e1a">
+<link rel="manifest" href="manifest.json">
+<title>Call-backs — Luna (Test)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>🤖 Call-backs</h1>
+  <p class="small">Missed a call? The receptionist calls back inside 8am–9pm, opens with the AI disclosure, and stops forever if you say “stop”.</p>
+
+  <nav class="pages">
+    <a href="index.html">Home</a>
+    <a href="talk.html">Talk to Luna</a>
+    <a href="calendar.html">Calendar</a>
+    <a href="callback.html" class="current">Call-backs</a>
+    <a href="desk.html">Front desk</a>
+  </nav>
+
+  <div class="card">
+    <h2 style="margin-top:0">Who is testing?</h2>
+    <label for="tester">Your name or label</label>
+    <input id="tester" type="text" placeholder="e.g. Eliane" autocomplete="off">
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Request a call-back</h2>
+    <div class="row">
+      <div><label for="cbName">Name</label><input id="cbName" type="text" placeholder="Test Caller"></div>
+      <div><label for="cbPhone">Phone</label><input id="cbPhone" type="tel" placeholder="+1 555 010 0000"></div>
+      <div><label for="cbReason">What was the call about?</label><input id="cbReason" type="text" placeholder="a check-up booking"></div>
+    </div>
+    <button id="cbReqBtn">Request a call-back</button>
+    <button id="cbSweepBtn" class="secondary">Run the call-back sweep</button>
+    <div id="cbResults" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card hidden" id="answerCard">
+    <h2 style="margin-top:0">Answer the call-back</h2>
+    <div class="log" id="cbTranscript"></div>
+    <div class="row" style="margin-top:10px">
+      <div style="flex:2">
+        <label for="cbMsgText">Type a message</label>
+        <input id="cbMsgText" type="text" placeholder="Type here…" autocomplete="off">
+      </div>
+    </div>
+    <button id="cbSendBtn">Send</button>
+    <button id="cbEndBtn" class="danger">End call</button>
+    <span id="cbCallState" class="small"></span>
+  </div>
+
+  <p class="small" id="healthLine">Backend: checking…</p>
+</div>
+<script src="api-config.js"></script>
+<script>
+initTester();
+showBackendHealth('healthLine');
+let cbSessionId = null;
+
+function cbLine(cls, who, text) {
+  const log = $('cbTranscript');
+  const p = document.createElement('p');
+  p.className = cls; p.innerHTML = '<b>' + who + ':</b> ' + escapeHtml(text);
+  log.appendChild(p); log.scrollTop = log.scrollHeight;
+}
+
+$('cbReqBtn').onclick = async () => {
+  try {
+    const item = await api('/api/callback/request', {
+      caller_name: $('cbName').value.trim() || 'Test Caller',
+      caller_phone: $('cbPhone').value.trim() || '+1 555 010 0000',
+      reason: $('cbReason').value.trim() || 'a check-up booking' });
+    $('cbResults').innerHTML = '<p>Call-back requested: <b>' + escapeHtml(item.id) + '</b> — ' + escapeHtml(item.status) + ' (reason: ' + escapeHtml(item.reason || 'none') + '). Now run the sweep.</p>';
+  } catch (e) { alert('Call-back request failed: ' + e.message); }
+};
+$('cbSweepBtn').onclick = async () => {
+  try {
+    const data = await api('/api/callback/sweep', {});
+    let html = '<p><b>Sweep results</b> (' + escapeHtml(data.now_local) + ', recipient time zone ' + escapeHtml(data.recipient_tz) + '):</p><ul>';
+    data.results.forEach(r => { html += '<li>' + escapeHtml(r.id || '') + ' — ' + escapeHtml(r.action || r.status || '') + '</li>'; });
+    html += '</ul>';
+    data.opened_sessions.forEach(s => {
+      html += '<p>📞 Call-back placed — <button class="secondary" data-sid="' + escapeHtml(s.session_id) + '" data-greeting="' + escapeHtml(s.greeting) + '" data-audio="' + escapeHtml(s.audio_data || '') + '">Answer it</button></p>';
+    });
+    $('cbResults').innerHTML = html;
+    $('cbResults').querySelectorAll('button[data-sid]').forEach(b => {
+      b.onclick = () => answerCallback(b.dataset.sid, b.dataset.greeting, b.dataset.audio);
+    });
+  } catch (e) { alert('Sweep failed: ' + e.message); }
+};
+
+function answerCallback(id, greeting, audioUrl) {
+  cbSessionId = id;
+  $('answerCard').classList.remove('hidden');
+  $('cbTranscript').innerHTML = '';
+  cbLine('agent', 'AI Receptionist (calling you back)', greeting);
+  playAudio(audioUrl);
+  $('cbCallState').textContent = 'Call-back live — try saying “stop”.';
+}
+
+async function cbSendTurn(text) {
+  if (!cbSessionId || !text) return;
+  cbLine('caller', 'You', text);
+  $('cbMsgText').value = '';
+  try {
+    const data = await api('/api/session/turn', { session_id: cbSessionId, text });
+    cbLine('agent', 'AI Receptionist', data.reply);
+    playAudio(data.audio_data);
+    if (data.action === 'opt_out') cbLine('sys', 'System', 'You opted out — your number was added to the do-not-call list.');
+  } catch (e) { cbLine('sys', 'System', 'Error: ' + e.message); }
+}
+$('cbSendBtn').onclick = () => cbSendTurn($('cbMsgText').value.trim());
+$('cbMsgText').addEventListener('keydown', e => { if (e.key === 'Enter') cbSendTurn($('cbMsgText').value.trim()); });
+$('cbEndBtn').onclick = async () => {
+  if (!cbSessionId) return;
+  try {
+    const data = await api('/api/session/end', { session_id: cbSessionId });
+    cbLine('sys', 'System', 'Call ended. Test bookings deleted: ' + (data.deleted_bookings.length || 'none') + '.');
+  } catch (e) { alert('Could not end the call cleanly: ' + e.message); }
+  cbSessionId = null;
+  $('cbCallState').textContent = '';
+};
+</script>
+</body>
+</html>

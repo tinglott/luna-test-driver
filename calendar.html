@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0e1a">
+<link rel="manifest" href="manifest.json">
+<title>Calendar — Luna (Test)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>🤖 Calendar</h1>
+  <p class="small">Bookings go to the test calendar. The calendar is connected once, by the owner, with one tap on Google's sign-in.</p>
+
+  <nav class="pages">
+    <a href="index.html">Home</a>
+    <a href="talk.html">Talk to Luna</a>
+    <a href="calendar.html" class="current">Calendar</a>
+    <a href="callback.html">Call-backs</a>
+    <a href="desk.html">Front desk</a>
+  </nav>
+
+  <div class="card">
+    <h2 style="margin-top:0">Connection status</h2>
+    <p id="calStatus" class="small">Checking calendar connection…</p>
+    <p class="small">Testers never sign in and never paste anything — only the owner connects the calendar, once.</p>
+    <a id="calConnectBtn" href="#" style="display:none"><button>Connect Google Calendar</button></a>
+    <p class="small" id="calNote"></p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Test a booking</h2>
+    <p class="small">Bookings are made inside a test call: open <a href="talk.html">Talk to Luna</a>, start a call, and say <i>“I want to book a check-up on Monday at 10am”</i>. The receptionist holds the slot, you confirm, and a real event is created on the test calendar — then <b>deleted automatically when your test call ends</b>. Nothing stays booked.</p>
+    <p class="small">First-time callers cannot book directly — the owner approves those on the <a href="desk.html">front desk page</a>.</p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Monthly report (draft)</h2>
+    <p class="small">The W3 monthly report, compiled from the test call log. The draft goes to Ting for review before it goes anywhere — nothing here is emailed.</p>
+    <label for="reportMonth">Month (YYYY-MM, blank = last month)</label>
+    <input id="reportMonth" type="text" placeholder="2026-11" autocomplete="off">
+    <button id="reportBtn" class="secondary">Compile report</button>
+    <div id="reportBox" style="margin-top:8px"></div>
+  </div>
+
+  <p class="small" id="healthLine">Backend: checking…</p>
+</div>
+<script src="api-config.js"></script>
+<script>
+initTester();
+showBackendHealth('healthLine');
+
+async function refreshCalendarStatus() {
+  const params = new URLSearchParams(location.search);
+  const el = $('calStatus'), btn = $('calConnectBtn'), note = $('calNote');
+  // The Connect button is a plain link to the backend's /authorize page:
+  // Google sign-in happens there, and after Allow the owner lands on the
+  // backend driver page (the OAuth callback lives on the backend).
+  btn.href = LUNA_API.primary + '/authorize';
+  if (params.get('calendar') === 'connected') {
+    el.innerHTML = '<b class="ok">Calendar connected ✓</b> — bookings will go to the test calendar.';
+    btn.style.display = 'none';
+    return;
+  }
+  try {
+    const data = await api('/api/calendar/status', null, 'GET');
+    if (data.connected) {
+      el.innerHTML = '<b class="ok">Calendar connected ✓</b> — bookings will go to the test calendar.';
+      btn.style.display = 'none';
+      note.textContent = '';
+    } else {
+      el.innerHTML = '<b class="bad">Calendar not connected yet.</b> The owner connects it once with one tap — testers do not need to do anything.';
+      btn.style.display = '';
+      note.textContent = 'After tapping Allow on Google\'s sign-in you will land on the backend test driver page — that is expected. Come back here when you are done.';
+    }
+  } catch (e) { el.textContent = 'Calendar status unavailable: ' + e.message; }
+}
+refreshCalendarStatus();
+
+$('reportBtn').onclick = async () => {
+  const box = $('reportBox');
+  const m = $('reportMonth').value.trim();
+  box.innerHTML = '<p class="small">Compiling…</p>';
+  try {
+    const data = await api('/api/report/monthly' + (m ? '?month=' + encodeURIComponent(m) : ''), null, 'GET');
+    const c = data.counts;
+    box.innerHTML = '<p><b>' + escapeHtml(data.subject) + '</b></p><pre>' + escapeHtml(data.body) + '</pre>' +
+      '<p class="small">Calls ' + c.calls_answered + ' · bookings ' + c.bookings + ' · messages ' + c.messages +
+      ' · spam blocked ' + c.spam_blocked + ' · minutes ' + data.minutes_used + ' of ' + data.allowance_minutes +
+      (c.undated_rows_excluded ? ' · ' + c.undated_rows_excluded + ' undated rows excluded' : '') + '</p>';
+  } catch (e) { box.innerHTML = '<p class="bad">Could not compile the report: ' + escapeHtml(e.message) + '</p>'; }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+/* Luna — GitHub Pages frontend. ARTISY palette, mobile-first.
+   Same look as the backend test driver (driver.html). */
+:root { --navy:#0a0e1a; --card:#151d36; --white:#eef1f8; --gold:#f5c451; --sky:#7fd4ff; --mist:#9aa3c0; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--navy); color:var(--white); }
+.wrap { max-width:860px; margin:0 auto; padding:18px 16px 60px; }
+h1 { font-size:1.35rem; margin:6px 0 2px; }
+h2 { font-size:1.05rem; margin:22px 0 8px; color:var(--gold); }
+p, li { line-height:1.5; }
+a { color:var(--sky); }
+.banner { background:var(--card); border:1px solid var(--gold); border-radius:10px; padding:12px 14px; margin:12px 0; }
+.banner b { color:var(--gold); }
+.card { background:var(--card); border:1px solid #26305a; border-radius:10px; padding:14px; margin:12px 0; }
+label { display:block; font-size:.85rem; color:var(--mist); margin:10px 0 4px; }
+input, select, textarea { width:100%; padding:9px 10px; border-radius:8px; border:1px solid #33406e; background:#0d1328; color:var(--white); font-size:1rem; }
+button { background:var(--gold); color:#111; border:0; border-radius:8px; padding:10px 16px; font-size:1rem; font-weight:600; cursor:pointer; margin:6px 6px 6px 0; }
+button.secondary { background:#26305a; color:var(--white); }
+button.danger { background:#7a2e2e; color:#fff; }
+button:disabled { opacity:.45; cursor:not-allowed; }
+.row { display:flex; gap:10px; flex-wrap:wrap; }
+.row > * { flex:1; min-width:160px; }
+.log { background:#0d1328; border:1px solid #26305a; border-radius:8px; padding:10px 12px; max-height:320px; overflow:auto; font-size:.95rem; }
+.log .caller { color:var(--sky); }
+.log .agent { color:var(--gold); }
+.log .sys { color:var(--mist); font-style:italic; }
+.log p { margin:6px 0; }
+pre { background:#0d1328; border:1px solid #26305a; border-radius:8px; padding:10px; overflow:auto; font-size:.82rem; white-space:pre-wrap; }
+.pill { display:inline-block; background:#26305a; border-radius:999px; padding:2px 10px; font-size:.8rem; margin:2px 4px 2px 0; }
+.ok { color:#8be28b; } .bad { color:#ff9a9a; }
+.small { font-size:.85rem; color:var(--mist); }
+#recState { font-weight:700; }
+.hidden { display:none; }
+nav.pages { display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 4px; }
+nav.pages a { background:var(--card); border:1px solid #26305a; border-radius:999px; padding:6px 12px; font-size:.9rem; text-decoration:none; color:var(--white); }
+nav.pages a.current { border-color:var(--gold); color:var(--gold); }

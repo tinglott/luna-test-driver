@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0e1a">
+<link rel="manifest" href="manifest.json">
+<title>Front desk — Luna (Test)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>🤖 Front desk</h1>
+  <p class="small">Walk-ins and owner approvals — the human side of the test desk.</p>
+
+  <nav class="pages">
+    <a href="index.html">Home</a>
+    <a href="talk.html">Talk to Luna</a>
+    <a href="calendar.html">Calendar</a>
+    <a href="callback.html">Call-backs</a>
+    <a href="desk.html" class="current">Front desk</a>
+  </nav>
+
+  <div class="card">
+    <h2 style="margin-top:0">Who is testing?</h2>
+    <label for="tester">Your name or label</label>
+    <input id="tester" type="text" placeholder="e.g. Eliane" autocomplete="off">
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Walk-ins</h2>
+    <div class="row">
+      <div><label for="wiName">Walk-in name</label><input id="wiName" type="text" placeholder="Walk-in One"></div>
+      <div><label for="wiService">Service</label><input id="wiService" type="text" placeholder="Check-up"></div>
+    </div>
+    <button id="wiAddBtn" class="secondary">Add walk-in</button>
+    <button id="wiServeBtn" class="secondary">Serve next walk-in</button>
+    <div id="wiStatus" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Owner approvals</h2>
+    <p class="small">First-time callers cannot book directly — their bookings wait here for the owner's decision. Approve writes a real calendar event; deny books nothing.</p>
+    <button id="apprRefreshBtn" class="secondary">Refresh approvals</button>
+    <div id="apprList" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Monitoring (W4 heartbeat)</h2>
+    <p class="small">The daily heartbeat: writes a heartbeat row to the activity log and reports whether the voice service is up — plus whether today is the Monday forwarding-check day.</p>
+    <button id="hbBtn" class="secondary">Send heartbeat</button>
+    <div id="hbResult" style="margin-top:8px"></div>
+  </div>
+
+  <p class="small" id="healthLine">Backend: checking…</p>
+</div>
+<script src="api-config.js"></script>
+<script>
+initTester();
+showBackendHealth('healthLine');
+
+$('wiAddBtn').onclick = async () => {
+  try { await api('/api/walkin/add', { name: $('wiName').value.trim() || 'Walk-in One', service: $('wiService').value.trim() || 'Check-up' }); refreshWalkins(); }
+  catch (e) { alert('Walk-in failed: ' + e.message); }
+};
+$('wiServeBtn').onclick = async () => { try { await api('/api/walkin/serve', {}); refreshWalkins(); } catch (e) { alert(e.message); } };
+async function refreshWalkins() {
+  try {
+    const list = await api('/api/walkin/status', null, 'GET');
+    $('wiStatus').innerHTML = list.length
+      ? '<p>' + list.map(w => escapeHtml(w.name) + ' — position ' + w.position + ', ~' + w.estimated_wait_minutes + ' min').join('<br>') + '</p>'
+      : '<p class="small">Walk-in queue is empty.</p>';
+  } catch (e) { $('wiStatus').innerHTML = ''; }
+}
+async function refreshApprovals() {
+  try {
+    const list = await api('/api/approval/pending', null, 'GET');
+    $('apprList').innerHTML = list.length
+      ? '<p><b>Pending owner approvals:</b></p>' + list.map(a =>
+          '<p>' + escapeHtml(a.service) + ' — ' + escapeHtml(a.caller_name) + ' (' + escapeHtml(a.start) + ') ' +
+          '<button class="secondary" data-id="' + escapeHtml(a.id) + '" data-ok="1">Approve</button> ' +
+          '<button class="danger" data-id="' + escapeHtml(a.id) + '" data-ok="0">Deny</button></p>').join('')
+      : '<p class="small">No pending approvals.</p>';
+    $('apprList').querySelectorAll('button[data-id]').forEach(b => {
+      b.onclick = () => decideApproval(b.dataset.id, b.dataset.ok === '1');
+    });
+  } catch (e) { $('apprList').innerHTML = ''; }
+}
+async function decideApproval(id, ok) {
+  try {
+    const item = await api(ok ? '/api/approval/approve' : '/api/approval/deny', { item_id: id });
+    alert(ok ? ('Approved — real calendar event ' + item.booking_event_id) : 'Denied — nothing was booked.');
+    refreshApprovals();
+  } catch (e) { alert('Approval failed: ' + e.message); }
+}
+$('apprRefreshBtn').onclick = refreshApprovals;
+
+$('hbBtn').onclick = async () => {
+  try {
+    const d = await api('/api/heartbeat', {});
+    $('hbResult').innerHTML = '<p>Heartbeat: <b class="' + (d.ok ? 'ok' : 'bad') + '">' + (d.ok ? 'service up ✓' : 'SERVICE DOWN') + '</b> — store ' + (d.store_ok ? 'ok' : 'DOWN') +
+      ' · calendar ' + (d.calendar_connected ? 'connected ✓' : 'not connected yet') +
+      (d.forwarding_check_due ? ' · <b>today is the Monday forwarding-check day — test-call the published number</b>' : '') +
+      ' <span class="small">(' + escapeHtml(d.ts) + ')</span></p>';
+  } catch (e) { $('hbResult').innerHTML = '<p class="bad">Heartbeat failed: ' + escapeHtml(e.message) + '</p>'; }
+};
+
+refreshWalkins(); refreshApprovals();
+</script>
+</body>
+</html>

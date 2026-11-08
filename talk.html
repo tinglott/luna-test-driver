@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0e1a">
+<link rel="manifest" href="manifest.json">
+<title>Talk to Luna — ARTISY AI Receptionist (Test)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <h1>🤖 Talk to Luna</h1>
+  <p class="small">Start a test call with the fictional Test Dental Practice and talk to the AI receptionist.</p>
+
+  <nav class="pages">
+    <a href="index.html">Home</a>
+    <a href="talk.html" class="current">Talk to Luna</a>
+    <a href="calendar.html">Calendar</a>
+    <a href="callback.html">Call-backs</a>
+    <a href="desk.html">Front desk</a>
+  </nav>
+
+  <div class="banner">
+    <b>Disclosure, first — always.</b> You are talking to an <b>AI receptionist</b>, not a person.
+    Say <b>“stop”</b> at any time and it will end the call and never call you again.
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">1 · Who is testing?</h2>
+    <label for="tester">Your name or label</label>
+    <input id="tester" type="text" placeholder="e.g. Eliane" autocomplete="off">
+    <p class="small">Invited affiliate testers only — if your name is not on the invite list, the call will not start.</p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">2 · Start a test call</h2>
+    <p class="small">Fictional business: <b>Test Dental Practice</b> (Mon–Fri 9am–5pm). Services: Check-up $45 · Hygiene Cleaning $89 · Emergency Visit (escalates to a human). Try: <i>“How much is a check-up?”</i> · <i>“I want to book a check-up on Monday at 10am”</i> · <i>“I feel like hurting myself”</i> (crisis — it must give 988) · <i>“stop”</i> (opt-out).</p>
+    <div class="row">
+      <div>
+        <label for="scenario">Scenario</label>
+        <select id="scenario">
+          <option value="inbound">Inbound call — front desk</option>
+          <option value="sales">Sales call — ask about buying</option>
+          <option value="newcaller">Inbound call — first-time caller (needs owner approval to book)</option>
+        </select>
+      </div>
+      <div>
+        <label for="callerName">Your name (as the caller)</label>
+        <input id="callerName" type="text" placeholder="Test Caller" autocomplete="off">
+      </div>
+      <div>
+        <label for="callerPhone">Your phone (test number is fine)</label>
+        <input id="callerPhone" type="tel" placeholder="+1 555 010 0000" autocomplete="off">
+      </div>
+    </div>
+    <button id="startBtn">Start test call</button>
+    <button id="endBtn" class="danger" disabled>End call</button>
+    <span id="callState" class="small"></span>
+  </div>
+
+  <div class="card" id="callCard" class="hidden">
+    <h2 style="margin-top:0">3 · Talk to the receptionist</h2>
+    <div class="log" id="transcript"><p class="sys">Start a test call above.</p></div>
+    <div class="row" style="margin-top:10px">
+      <div style="flex:2">
+        <label for="msgText">Type a message</label>
+        <input id="msgText" type="text" placeholder="Type here, or use the microphone…" autocomplete="off">
+      </div>
+    </div>
+    <button id="sendBtn" disabled>Send</button>
+    <button id="micBtn" class="secondary" disabled>🎤 Hold to talk</button>
+    <span id="recState" class="small"></span>
+    <div id="bookingBox" class="banner hidden" style="border-color:var(--sky)">
+      <b>Booking ready to confirm:</b> <span id="bookingText"></span><br>
+      <button id="confirmBtn">Yes, book it</button>
+      <button id="cancelBookingBtn" class="secondary">No, cancel</button>
+      <p class="small">The receptionist only books after you confirm. Test bookings are real calendar events — and they are <b>deleted automatically when your test call ends</b>.</p>
+    </div>
+    <div id="approvalBox" class="banner hidden">
+      <b>Owner approval needed:</b> <span id="approvalText"></span><br>
+      <span class="small">First-time callers cannot book directly — the owner approves on the <a href="desk.html">front desk page</a>.</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">4 · What happened on the call</h2>
+    <p class="small">When you end a call, the owner summary (the email the business owner would get) and the call record appear here.</p>
+    <div id="summaryBox"></div>
+  </div>
+
+  <p class="small" id="healthLine">Backend: checking…</p>
+</div>
+<script src="api-config.js"></script>
+<script>
+initTester();
+showBackendHealth('healthLine');
+let sessionId = null, mediaRecorder = null, recChunks = [];
+
+function addLine(cls, who, text) {
+  const log = $('transcript');
+  if (log.querySelector('.sys') && log.children.length === 1) log.innerHTML = '';
+  const p = document.createElement('p');
+  p.className = cls; p.innerHTML = '<b>' + who + ':</b> ' + escapeHtml(text);
+  log.appendChild(p); log.scrollTop = log.scrollHeight;
+}
+
+$('startBtn').onclick = async () => {
+  const scenarioSel = $('scenario').value;
+  const body = {
+    scenario: scenarioSel === 'newcaller' ? 'inbound' : scenarioSel,
+    caller_name: $('callerName').value.trim() || 'Test Caller',
+    caller_phone: $('callerPhone').value.trim() || '+1 555 010 0000',
+    caller_is_new: scenarioSel === 'newcaller'
+  };
+  $('startBtn').disabled = true;
+  try {
+    const data = await api('/api/session/start', body);
+    sessionId = data.session_id;
+    $('callCard').classList.remove('hidden');
+    $('transcript').innerHTML = '';
+    addLine('agent', 'AI Receptionist', data.greeting);
+    playAudio(data.audio_data);
+    $('callState').textContent = 'Call live — ' + data.business + ' (' + data.scenario + ')';
+    $('endBtn').disabled = false; $('sendBtn').disabled = false; $('micBtn').disabled = false;
+  } catch (e) { alert('Could not start the test call: ' + e.message); $('startBtn').disabled = false; }
+};
+
+$('endBtn').onclick = async () => {
+  if (!sessionId) return;
+  try {
+    const data = await api('/api/session/end', { session_id: sessionId });
+    const s = data.summary;
+    $('summaryBox').innerHTML =
+      '<p><b>Owner summary</b> — subject: ' + escapeHtml(s.subject) + '</p><pre>' + escapeHtml(s.body) + '</pre>' +
+      '<p class="small">Call record posted to the test log (status ' + data.post_status + '). Test bookings deleted: ' +
+      (data.deleted_bookings.length ? data.deleted_bookings.join(', ') : 'none') + '.</p>' +
+      '<details><summary class="small">Raw call record</summary><pre>' + escapeHtml(JSON.stringify(data.payload, null, 2)) + '</pre></details>';
+    addLine('sys', 'System', 'Call ended. Test bookings deleted: ' + (data.deleted_bookings.length || 'none') + '.');
+  } catch (e) { alert('Could not end the call cleanly: ' + e.message); }
+  sessionId = null;
+  $('endBtn').disabled = true; $('sendBtn').disabled = true; $('micBtn').disabled = true; $('startBtn').disabled = false;
+  $('callState').textContent = '';
+};
+
+async function sendTurn(text) {
+  if (!sessionId || !text) return;
+  addLine('caller', 'You', text);
+  $('msgText').value = '';
+  try {
+    const data = await api('/api/session/turn', { session_id: sessionId, text });
+    addLine('agent', 'AI Receptionist', data.reply);
+    playAudio(data.audio_data);
+    if (data.pending_booking) {
+      const p = data.pending_booking;
+      $('bookingText').textContent = p.service + ' — ' + new Date(p.start).toLocaleString() + ' to ' + new Date(p.end).toLocaleTimeString();
+      $('bookingBox').classList.remove('hidden');
+    } else { $('bookingBox').classList.add('hidden'); }
+    if (data.approval_item) {
+      $('approvalText').textContent = data.approval_item.service + ' — ' + data.approval_item.caller_name + ' (' + data.approval_item.start + ')';
+      $('approvalBox').classList.remove('hidden');
+    }
+    if (data.action === 'opt_out') addLine('sys', 'System', 'You opted out — your number was added to the do-not-call list.');
+  } catch (e) { addLine('sys', 'System', 'Error: ' + e.message); }
+}
+
+$('sendBtn').onclick = () => sendTurn($('msgText').value.trim());
+$('msgText').addEventListener('keydown', e => { if (e.key === 'Enter') sendTurn($('msgText').value.trim()); });
+
+$('confirmBtn').onclick = async () => {
+  if (!sessionId) return;
+  try {
+    const data = await api('/api/session/confirm', { session_id: sessionId });
+    addLine('agent', 'AI Receptionist', data.reply);
+    playAudio(data.audio_data);
+    addLine('sys', 'System', 'Booked: ' + data.service + ' at ' + new Date(data.start).toLocaleString() + ' (event ' + data.event_id + '). It will be deleted when the call ends.');
+    $('bookingBox').classList.add('hidden');
+  } catch (e) { alert('Booking failed: ' + e.message); }
+};
+$('cancelBookingBtn').onclick = async () => {
+  if (!sessionId) return;
+  try { await api('/api/session/cancel-booking', { session_id: sessionId }); } catch (e) { /* best effort */ }
+  $('bookingBox').classList.add('hidden');
+  addLine('sys', 'System', 'Booking cancelled — no appointment was made.');
+};
+
+// Microphone: hold to talk, release to send.
+$('micBtn').addEventListener('pointerdown', async e => {
+  e.preventDefault();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = ev => recChunks.push(ev.data);
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      $('recState').textContent = 'Transcribing…';
+      const blob = new Blob(recChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+      const fd = new FormData(); fd.append('audio', blob, 'voice.webm');
+      try {
+        const data = await apiForm('/api/session/transcribe', fd);
+        $('recState').textContent = '';
+        if (data.text) sendTurn(data.text);
+      } catch (err) { $('recState').textContent = 'Transcription failed: ' + err.message; }
+    };
+    mediaRecorder.start();
+    $('recState').textContent = '● Recording — release to send';
+  } catch (err) { $('recState').textContent = 'Microphone unavailable: ' + err.message + ' — type instead.'; }
+});
+$('micBtn').addEventListener('pointerup', () => { if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop(); });
+$('micBtn').addEventListener('pointerleave', () => { if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.stop(); });
+</script>
+</body>
+</html>
