@@ -769,7 +769,9 @@ def session_turn():
 
     # Booking intent in the caller's words -> pending slot (needs confirm).
     slot, parse_reason = parse_booking_intent(text, session.config)
+    new_slot = False
     if slot:
+        new_slot = True
         # VERCEL: the slot also carries "start"/"end" as datetime objects
         # — the bench kept them in process memory, but this record is
         # JSON-serialized into KV, and datetimes are not JSON-safe. Keep
@@ -800,6 +802,41 @@ def session_turn():
                                       booked.get("action", "booked"), booked)
         elif booked:
             reply = booked["error"]
+    elif new_slot and action not in ("escalate", "escalate_crisis", "opt_out",
+                                     "spam_close", "pending_approval"):
+        # FIX (Nov 8, fallback-reply bug): the reply above came from the
+        # brain, which runs BEFORE the parse and knows nothing about the
+        # slot — it can be the generic BrainUnavailable apology (brain
+        # down) or a narrated tool call ("Action: calendar.freeBusy").
+        # When a slot was parsed, answer with the deterministic
+        # confirmation question built from the slot instead, so booking
+        # works even with the brain down. Same wording and action as the
+        # handler's own confirm question (call_handler.py session.book).
+        readable = datetime.fromisoformat(slot["start_iso"]).strftime(
+            "%A %-d %B %Y at %-I:%M %p")
+        reply = (f"Just to confirm before I book it — {slot['service']} "
+                 f"on {readable}. Is that right?")
+        action = "confirm"
+    elif (action == "message_take" and parse_reason in
+            ("no service named", "no time given", "no day given")
+            and re.search(r"\b(book|booking|schedule|appointment)\b",
+                          text.lower())):
+        # Context-specific fallback (same fix): the caller tried to book
+        # but the parser could not complete the slot — ask for the missing
+        # piece instead of the generic apology. Gated on a booking word so
+        # non-booking turns never land here ("no service named" fires for
+        # any text without a service name).
+        if parse_reason == "no service named":
+            services = (session.config.get("business") or {}).get("services") or []
+            names = [s.get("name") if isinstance(s, dict) else str(s)
+                     for s in services]
+            reply = ("Which service would you like to book — "
+                     + ", ".join(names) + "?")
+        elif parse_reason == "no time given":
+            reply = "What day and time works for you?"
+        else:
+            reply = "What day would you like to come in?"
+        action = "confirm"
 
     if action == "opt_out" or "opt_out" in (result.flags or []):
         # FIX #8: compare through is_on_dnc — the raw phone never matches

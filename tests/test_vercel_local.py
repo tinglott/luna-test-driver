@@ -290,6 +290,19 @@ def main() -> int:
         log_check("booking_intent_parsed",
                   pending.get("service") == "Check-up" and is_monday_10am,
                   json.dumps(pending))
+        # REGRESSION (Nov 8, fallback-reply bug): the brain is absent on
+        # the bench, so handle_turn falls back to the generic apology —
+        # but a parsed slot must still get the deterministic confirmation
+        # question, never the apology, and the cause must be visible.
+        turn_reply = turn_data.get("reply", "")
+        log_check("booking_turn_reply_is_confirmation_not_fallback",
+                  turn_data.get("action") == "confirm"
+                  and turn_reply.startswith("Just to confirm before I book it")
+                  and "Sorry" not in turn_reply,
+                  f"action={turn_data.get('action')} reply={turn_reply[:100]}")
+        log_check("brain_down_flag_visible_in_response",
+                  "brain_unavailable_message_taking" in (turn_data.get("flags") or []),
+                  f"flags={turn_data.get('flags')}")
         booked = client.post("/api/session/confirm",
                              json={"session_id": sid, "tester": "bench-battery"},
                              headers=tester_headers)

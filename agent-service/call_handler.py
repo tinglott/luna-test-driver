@@ -25,7 +25,9 @@ import urllib.request
 import uuid
 from dataclasses import dataclass, field
 
-from brain import BrainUnavailable, brain_reply, build_system_prompt
+from brain import (BrainUnavailable, brain_reply, brain_reply_with_tools,
+                   build_system_prompt)
+from tools import execute_tool, tools_for_config
 from callback_queue import add_to_dnc_list
 from calendar_booking import CalendarError, book_appointment
 from gates import GateResult, detect_language, deterministic_lookup, hard_gates, post_llm_gate
@@ -142,10 +144,33 @@ class CallSession:
             return self._reply(answer, "lookup")
 
         # Step 4 — LLM, constrained by the config. Brain failure is not fatal.
+        # Real tool calling (ARIA Nexus fill, gap 4): when this role config
+        # allows a tool with a real implementation, the brain may call it
+        # for real — no more keyword guessing. When no such tool is allowed
+        # (every current config), this is exactly the old brain_reply path.
+        tools = tools_for_config(self.config)
         try:
-            reply, model, _usage = brain_reply(
-                build_system_prompt(self.config), caller_text
-            )
+            if tools:
+                owner_email = (self.config.get("ownerSummary") or {}).get("to")
+                ctx = {
+                    "allowed_tools": self.config.get("allowedTools") or [],
+                    "client_id": self.client_id,
+                    "owner_emails": [owner_email] if owner_email else [],
+                    # Dry run by default: tools compose/queue but send
+                    # nothing and insert nothing until Ting opts a client
+                    # in to real writes. See tools.py.
+                    "allow_real_writes": False,
+                }
+                reply, model, _usage, executed = brain_reply_with_tools(
+                    build_system_prompt(self.config), caller_text, tools,
+                    lambda name, args: execute_tool(name, args, ctx),
+                )
+                for item in executed:
+                    self.flags.append(f"tool:{item['tool']}:{item['status']}")
+            else:
+                reply, model, _usage = brain_reply(
+                    build_system_prompt(self.config), caller_text
+                )
         except BrainUnavailable:
             self.flags.append("brain_unavailable_message_taking")
             # Distinct wording from the calendar fallback: the diary may be
@@ -182,7 +207,10 @@ class CallSession:
 
     def _reply(self, text: str, action: str) -> TurnResult:
         self.transcript.append({"speaker": "agent", "text": text})
-        return TurnResult(reply=text, action=action)
+        # FIX (Nov 8): surface the session flags on the reply so the cause
+        # of a fallback is visible to the caller/test — until now flags
+        # was always [] and a BrainUnavailable turn was undebuggable.
+        return TurnResult(reply=text, action=action, flags=list(self.flags))
 
     # -- booking (step 6) -------------------------------------------------
     def book(self, service: str, start: str, end: str) -> TurnResult:
