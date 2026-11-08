@@ -1,113 +1,48 @@
-# Luna test driver — Vercel build (primary) + PythonAnywhere (second home)
+# Luna — GitHub Pages frontend
 
-The ARTISY AI receptionist (Luna) test site. One codebase, two
-deploys — Ting's call Nov 7, 2026 ("do both", hybrid, work smarter
-not harder): the same OAuth + PWA app runs on **Vercel (primary)** and
-**PythonAnywhere (second home / backup)**, sharing one Upstash store,
-so one Allow tap connects the calendar on both. The sibling tree
-`../pythonanywhere-driver/` is the same code adapted for the PA
-WSGI entry point (plus `DEPLOY.md` for the PA host steps).
+One static page per Luna feature. GitHub Pages hosts the FRONTEND;
+the Python backends (Vercel primary, PythonAnywhere second home) do
+the brain, the calendar, and the TTS. The pages call the backend;
+they never do any of that work themselves.
 
-**Status (Nov 7, 2026, evening): OAuth + PWA port complete and
-bench-verified — see BUILD-REPORT.md. The Vercel project
-`luna-test-driver` (team zigg1, account samanlott) is LIVE; this
-port pushes to `main` and Vercel auto-deploys. The service-account
-path is GONE from this build — no key file anywhere.**
+**Live site (once Pages is enabled): https://tinglott.github.io/luna-test-driver/**
 
-## What changed vs the Space build (HOST-ASSESSMENT-NOV7.md)
+## Pages
 
-| Area | Space build | This build |
+| Page | Feature | Backend routes it calls |
 |---|---|---|
-| Calendar | Reverse relay to the bench | Google OAuth 2.0 web flow (`/authorize` + `/oauth2callback`), refresh token in Upstash KV (`luna:google_oauth`); direct Calendar API (`agent-service/calendar_booking.py`) |
-| TTS | Kokoro sidecar (af_heart) | Groq Canopy Orpheus, voice `hannah` (`groq_tts.py`) — **voice changes; this test does NOT validate the real voice** |
-| State | Process memory + local disk | Upstash Redis via REST (`kvstore.py`) — sessions, queues, DNC, logs, rate limits |
-| Stub server | Local stub captures call-end posts | Call-end payload written to the KV activity log (returns 201) |
-| Relay | WebSocket relay hub | Deleted |
-| Phone install | Plain web page | PWA (`/manifest.json`, `/sw.js`, icons, `display: standalone`) — modelled on Willow Tales |
-| Layout | `api/index.py` (legacy) | Root `index.py` — Vercel Flask framework preset (auto-detected) |
+| `index.html` | Landing / install + tester entry + feedback | `GET /health`, `POST /api/feedback` |
+| `talk.html` | Voice receptionist — start a call, talk (type or mic), confirm/cancel a booking, end, owner summary | `/api/session/start`, `/turn`, `/transcribe`, `/confirm`, `/cancel-booking`, `/end` |
+| `calendar.html` | Calendar connect status + monthly report draft | `GET /api/calendar/status`, `/authorize` (link), `GET /api/report/monthly` |
+| `callback.html` | Call-backs — request, sweep, answer | `/api/callback/request`, `/api/callback/sweep`, `/api/session/turn`, `/api/session/end` |
+| `desk.html` | Front desk — walk-ins, owner approvals, W4 heartbeat | `/api/walkin/*`, `/api/approval/*`, `POST /api/heartbeat` |
+
+## Shared files
+
+- `api-config.js` — the ONE place that knows the API base URL.
+  Vercel primary (`https://luna-test-driver.vercel.app`), PythonAnywhere
+  fallback (`https://tinglott.pythonanywhere.com`). A call falls back
+  only on a network failure or 502/503/504 — a 4xx is a real answer
+  and is never retried. The tester gate is enforced BY THE BACKEND;
+  the pages only pass the tester name through (`X-Tester` header).
+- `style.css` — ARTISY navy/gold, mobile-first (same look as the
+  backend test driver).
+- `manifest.json` + `sw.js` — PWA shell (installable). The worker
+  caches same-origin shell files only; API calls always go to the
+  network, never cached. Icons are served from the Vercel backend
+  (the push tool is text-only, so no binary icons live in this repo).
 
 ## Deploy
 
-Vercel project: **`luna-test-driver`**, team **zigg1**, account
-**samanlott** ONLY. Never the tinglott@gmail.com Vercel account
-(stopped Oct 31 by Ting's word). Push this folder to GitHub repo
-`tinglott/luna-test-driver` on `main` — Vercel auto-deploys from
-main. The PWA icons are NOT in git (the GitHub push tool is
-text-only); `vercel.json` runs `tools/make_icons.py` at build time
-(`pip install pillow` first) so `/icon-192.png` and `/icon-512.png`
-resolve on the live deployment.
+This directory is pushed to the `gh-pages` branch of
+`tinglott/luna-test-driver` (it does NOT disturb Vercel's
+main-branch deploy). GitHub Pages must be enabled once in the repo
+Settings → Pages → source: `gh-pages` branch. After that, every push
+to `gh-pages` republishes the site.
 
-## Environment variables (Vercel dashboard — secrets pasted there only, never in chat/repo)
+## Backend changes this frontend needs
 
-| Variable | Value / source |
-|---|---|
-| `GROQ_API_KEY` | Ting's Groq key (already set — copied from the `artisy-guide-api` project's `aira` var) |
-| `GOOGLE_OAUTH_CLIENT_ID` | From the Google Cloud OAuth client (copy at creation; one client carries BOTH redirect URIs — Vercel + PythonAnywhere) |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | From the Google Cloud OAuth client (copy at creation) |
-| `CALENDAR_ID` | `tinglott@gmail.com` (already set) |
-| `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | Injected automatically by the Upstash Redis Marketplace integration (already set). Legacy `KV_REST_API_URL`/`KV_REST_API_TOKEN` also accepted — **the same store the PythonAnywhere deploy uses, so one Allow tap serves both hosts** |
-| `LUNA_TEST_RESET_KEY` | Optional — random string; enables POST /api/test/reset for repeat battery runs. Leave unset and the endpoint 404s |
-
-## Owner taps (all Ting's — see BUILD-REPORT.md for the exact list)
-
-1. **Google Cloud console: ONE OAuth client** (project
-   `luna-test-514021`) — consent screen External, Web client with
-   BOTH redirect URIs (Vercel stable URL + PythonAnywhere URL), test
-   users = Ting + the 4 affiliates with emails on file, publish to
-   Production if the console allows.
-2. **One Allow tap** — open the app, tap Connect Google Calendar,
-   sign in as tinglott@gmail.com, Allow (Advanced → Go to continue
-   if the unverified-app warning appears), then Install app. The
-   refresh token lands in Upstash and BOTH hosts read it.
-3. PythonAnywhere signup needs Ting's password (his step, secure
-   card) — see `../pythonanywhere-driver/DEPLOY.md`.
-4. Hobby-vs-Pro call: Vercel Hobby is non-commercial only; this
-   affiliate test for a paid service is commercial — Hobby risks a
-   pause, Pro $20/mo/seat removes it. Do NOT buy Pro without his word.
-   Also watch: Hobby functions time out at 10 s — the slowest Luna
-   request (TTS + brain + booking) is only proven live.
-
-## Local testing
-
-```bash
-~/workspace/venvs/luna-vercel/bin/pip install -r requirements.txt
-# test-client suite (starts its own fake Calendar API):
-~/workspace/venvs/luna-vercel/bin/python tests/test_vercel_local.py
-# full HTTP battery (mock KV + fake Calendar API + driver):
-tests/run_vercel_battery.sh
-# gates:
-~/workspace/venvs/luna-vercel/bin/python tests/luna-gate-probe.py
-```
-
-## Files
-
-- `index.py` — Flask app (entrypoint; Vercel imports `app`)
-- `kvstore.py` — Upstash Redis REST / memory / fail-closed store
-- `groq_tts.py` — Groq Orpheus TTS (200-char chunks, WAV stitch)
-- `groq_whisper.py` — Groq Whisper STT (in-process + CLI)
-- `booking_parse.py`, `driver.html` — driver page (`audio_url` →
-  `audio_data` data URI; calendar connect card + SW registration)
-- `manifest.json`, `sw.js` — PWA shell (`/api/*` network-only, never cached)
-- `tools/make_icons.py` — generates the PWA icons at Vercel build time
-- `agent-service/` — brain, gates (Nov 7 FIXED, v1.0.3), call handler
-  (+ session serialization), OAuth calendar, `google_oauth.py`
-  (`/authorize` + `/oauth2callback`), KV-backed queues, role loader,
-  sales leads, business hours
-- `roles/` — role configs v1.0.3
-- `tests/` — battery, gate probe, fake Calendar API, mock KV server
-- `test-evidence/` — battery results + battery log
-
-## Guardrails (kept from the bench)
-
-- Tester gate: only the nine invited affiliates + bench-battery.
-- Hard gates: Nov 7 fixed gates, 0 failures on the probe.
-- Fail closed: no AI disclosure → no session; invalid config →
-  message-taking only; calendar down → message-taking, never a fake
-  booking; store down → 503, never a fake session.
-- Test bookings are deleted on session end (verified, not assumed);
-  abandoned sessions are purged on the next session start.
-- No secrets in this repo (verified by grep). No live Whop/Gumroad/
-  JVZoo changes. No affiliate messages — Ting tests first.
-- No service-account key anywhere in this build. After OAuth is
-  verified working on BOTH hosts, delete both live SA keys
-  (`8e534b066af5`, `b674f2078718`) — see BUILD-REPORT.md.
+CORS: the backends allow exactly one cross-origin caller —
+`https://tinglott.github.io` (see `index.py` in `vercel-driver/` and
+`pythonanywhere-driver/`). If the Pages URL ever changes, update
+`ALLOWED_CORS_ORIGINS` in both drivers and redeploy.
