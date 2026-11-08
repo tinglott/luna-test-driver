@@ -64,7 +64,8 @@ def call_groq(messages: list[dict], model: str = PRIMARY_MODEL,
             "Content-Type": "application/json",
             # Cloudflare in front of api.groq.com bans the default
             # Python-urllib signature (error 1010); a plain app UA passes.
-            "User-Agent": "Mozilla/5.0 (compatible; ARTISY-FreeStack/1.0)",
+            # Plain browser UA: Cloudflare 1010-blocks custom UAs on the bench egress proxy (Nov 7).
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         },
     )
     try:

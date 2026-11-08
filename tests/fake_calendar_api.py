@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """Fake Google Calendar API server — local test double for the Vercel
-calendar_booking.py module (service-account, direct Calendar API).
+calendar_booking.py module (OAuth grant, direct Calendar API).
 
 Why: the Vercel build calls the real googleapiclient library against
-the real Google API shape, but local testing has no service account
-(Ting's taps come later). This server proves the request/response code
-path end-to-end with the REAL client library: discovery-doc fetch,
-service-account JWT grant to /token, freebusy/events request
+the real Google API shape, but local testing has no Google grant
+(Ting's Allow tap comes later). This server proves the request/response
+code path end-to-end with the REAL client library: discovery-doc fetch,
+OAuth refresh-token grant to /token, freebusy/events request
 construction, 404 mapping, read-back verification.
 
 It is NOT Google: the only unproven parts after a pass here are the
-real endpoint + the real service-account key — both proven later by
+real endpoint + the real OAuth grant — both proven later by
 the public-URL battery run after Ting's taps.
 
 Serves (stdlib only, port 18103):
   GET  /discovery/calendar-v3.json  — minimal Calendar v3 discovery doc
        (rootUrl/servicePath rewritten to this server)
-  POST /token                      — dummy access token for the JWT grant
+  POST /token                      — dummy access token for the OAuth refresh grant
   POST /calendar/v3/freeBusy       — busy intervals for a calendar
   POST /calendar/v3/calendars/{cal}/events
   GET  /calendar/v3/calendars/{cal}/events/{id}
@@ -25,7 +25,7 @@ Serves (stdlib only, port 18103):
 
 Events live in memory (dict). A calendar id of "test-calendar" is the
 test calendar; any other calendar id 404s on freebusy (like a calendar
-the service account was never shared on).
+the signed-in account has no access to).
 
 Usage: python3 fake_calendar_api.py [port]  (default 18103)
 State file: /tmp/luna-fake-calendar-state.json (so the battery can

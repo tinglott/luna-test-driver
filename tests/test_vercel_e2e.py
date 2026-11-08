@@ -13,8 +13,8 @@ the redesign forces — and nothing else:
   * The do-not-call write is verified BEHAVIOURALLY (a callback for
     the opted-out number is suppressed), not by reading a file.
   * Calendar read-backs go through the Vercel calendar module
-    (service account -> fake Calendar API locally, real Calendar API
-    on the public run) with CALENDAR_ID from env.
+    (stored OAuth grant -> fake Calendar API locally, real Calendar API
+    on the public run after Ting's Allow tap) with CALENDAR_ID from env.
   * The Twilio bridge unit test runs from the BENCH agent-service
     (the bridge module is unchanged by the Vercel rebuild; it is not
     part of this repo) and the mu-law check uses the greeting audio
@@ -32,7 +32,7 @@ is reported as BLOCKED, honestly, not as a pass).
 Run:  LUNA_BASE=http://127.0.0.1:18102 LUNA_TEST_RESET_KEY=<key> \
         GROQ_API_KEY=<surrogate> python3 tests/test_vercel_e2e.py
 The driver must be up with the same env (fake calendar + mock KV for
-local runs; real service account + Upstash Redis on the public run).
+local runs; real OAuth grant + Upstash Redis on the public run).
 Results: vercel-driver/test-evidence/test-vercel-e2e-results.json
 """
 

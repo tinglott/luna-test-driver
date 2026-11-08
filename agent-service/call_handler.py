@@ -250,8 +250,8 @@ class CallSession:
     def confirm_booking(self) -> None:
         self._confirmed = True
 
-    # -- Vercel serialization (stateless functions) -----------------------
-    # The bench keeps CallSession objects in process memory. A Vercel
+    # -- Serialization (no shared process memory) ---------------------------
+    # The bench keeps CallSession objects in process memory. A hosted
     # function cannot: each request may land on a fresh instance. The
     # session is therefore serialized to the KV store between turns and
     # restored here. `config` is NOT serialized — it is reloaded from

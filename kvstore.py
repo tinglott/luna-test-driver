@@ -75,7 +75,11 @@ class _MemoryBackend:
 
     def __init__(self) -> None:
         self._data: dict[str, tuple[str, float | None]] = {}
-        self._lock = threading.Lock()
+        # RLock, not Lock: incr() calls get()/set() while holding the
+        # lock. A plain Lock deadlocks there forever (found Nov 7 by
+        # the bench test-client suite — the first rate-limited /api/
+        # call hung with no error and no timeout).
+        self._lock = threading.RLock()
 
     def get(self, key: str) -> str | None:
         with self._lock:

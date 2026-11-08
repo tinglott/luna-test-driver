@@ -30,8 +30,8 @@ from pathlib import Path
 
 
 def _read_all(queue_file: str | Path) -> list[dict]:
-    # VERCEL: "kv://<key>" reads the whole list from the KV store
-    # (Vercel has no shared disk); plain paths keep file behaviour.
+     # HOSTED: "kv://<key>" reads the whole list from the KV store
+    # (the host has no shared disk); plain paths keep file behaviour.
     if str(queue_file).startswith("kv://"):
         from kvstore import get_store
         return get_store().list_get(str(queue_file)[5:])
@@ -42,7 +42,7 @@ def _read_all(queue_file: str | Path) -> list[dict]:
 
 
 def _write_all(queue_file: str | Path, items: list[dict]) -> None:
-    # VERCEL: "kv://<key>" writes the whole list to the KV store.
+     # HOSTED: "kv://<key>" writes the whole list to the KV store.
     if str(queue_file).startswith("kv://"):
         from kvstore import get_store
         get_store().list_set(str(queue_file)[5:], list(items))

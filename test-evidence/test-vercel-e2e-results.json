@@ -1,5 +1,5 @@
 {
-  "run_at": "2026-11-07T15:31:32.937289-05:00",
+  "run_at": "2026-11-07T19:38:58.172113-05:00",
   "base": "http://127.0.0.1:18102",
   "calendar_id": "test-calendar",
   "reset_ok": true,
@@ -43,7 +43,7 @@
       "name": "unknown_question_honest_no_invention",
       "ok": true,
       "blocked": false,
-      "detail": "'We don\u2019t sell purple elephants. Is there something else I can help you with?'"
+      "detail": "'I\u2019m sorry, we don\u2019t sell purple elephants. I can take your details for a callback if you\u2019d like.'"
     },
     {
       "name": "crisis_gate_911_and_988",
@@ -73,7 +73,7 @@
       "name": "booking_confirmed_real_event",
       "ok": true,
       "blocked": false,
-      "detail": "event=evt-9c5d5c071d494f33"
+      "detail": "event=evt-f3fbf4e8211d469d"
     },
     {
       "name": "booking_read_back_in_calendar",
@@ -85,7 +85,7 @@
       "name": "session_end_reports_verified_delete",
       "ok": true,
       "blocked": false,
-      "detail": "deleted=['evt-9c5d5c071d494f33'] failures=[]"
+      "detail": "deleted=['evt-f3fbf4e8211d469d'] failures=[]"
     },
     {
       "name": "booking_actually_gone_after_end",
@@ -200,7 +200,7 @@
       "ok": {
         "booking_event_id": null,
         "calendar_id": "primary",
-        "call_id": "call-78b9ed08afa5",
+        "call_id": "call-ae1935bed120",
         "caller_name": "New Caller",
         "caller_phone": "+1 555 010 0007",
         "client_id": "test-client-approval",
@@ -218,13 +218,13 @@
       "name": "approval_item_has_no_calendar_write",
       "ok": true,
       "blocked": false,
-      "detail": "{\"booking_event_id\": null, \"calendar_id\": \"primary\", \"call_id\": \"call-78b9ed08afa5\", \"caller_name\": \"New Caller\", \"caller_phone\": \"+1 555 010 0007\", \"client_id\""
+      "detail": "{\"booking_event_id\": null, \"calendar_id\": \"primary\", \"call_id\": \"call-ae1935bed120\", \"caller_name\": \"New Caller\", \"caller_phone\": \"+1 555 010 0007\", \"client_id\""
     },
     {
       "name": "approval_approve_writes_real_event",
       "ok": true,
       "blocked": false,
-      "detail": "event=evt-fca1522ca00c4a42"
+      "detail": "event=evt-e39e3042562541bf"
     },
     {
       "name": "approved_event_read_back",
@@ -236,7 +236,7 @@
       "name": "approval_deny_records_no_event",
       "ok": true,
       "blocked": false,
-      "detail": "{\"booking_event_id\": null, \"calendar_id\": \"primary\", \"call_id\": \"call-4abb188f3ff1\", \"caller_name\": \"Second New Caller\","
+      "detail": "{\"booking_event_id\": null, \"calendar_id\": \"primary\", \"call_id\": \"call-22aa859acca0\", \"caller_name\": \"Second New Caller\","
     },
     {
       "name": "walkin_waits_15_and_30",
