@@ -50,7 +50,11 @@ from google.oauth2 import id_token as google_id_token
 
 SCOPES = [
     "openid",
-    "email",
+    # Full userinfo.email URL, NOT the "email" shorthand: Google returns
+    # the shorthand expanded to this URL in the token response, and
+    # oauthlib then raises "Scope has changed" and refuses the sign-in
+    # (seen live Nov 7). The full URL keeps requested == returned.
+    "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/calendar.events",
 ]
 CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
