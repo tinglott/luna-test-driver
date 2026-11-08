@@ -128,3 +128,22 @@ verified by reading `index.py` + `google_oauth.py` +
 6. **After OAuth is verified working**: delete BOTH service-account
    keys (`8e534b066af5`, `b674f2078718`). The Vercel deployment stays
    untouched as fallback.
+
+---
+
+## Addendum — CORS + W3/W4 routes (Nov 7, evening, dual-host phases 2–3)
+
+Same changes as the Vercel tree (one codebase, two deploys):
+
+- **CORS for GitHub Pages**: `ALLOWED_CORS_ORIGINS =
+  {"https://tinglott.github.io"}`, `@app.after_request` grants that
+  origin only; OPTIONS preflights bypass the tester gate and the rate
+  limiter. The tester gate still applies to every real `/api/` call.
+- **W3 `/api/report/monthly`** (GET): compiles the month from the KV
+  activity log like the W3 Code node; returns the DRAFT (nothing
+  emailed — no Gmail send step in this test driver).
+- **W4 `/api/heartbeat`** (POST): writes a heartbeat row to the KV
+  activity log and reports service-up + Monday forwarding-check-day.
+- **created_at stamp** on every activity-log row (W1's Supabase shape).
+- Bench-verified on the Vercel tree (37/37 suite + 10/10 CORS/W3/W4
+  ad-hoc checks); the PA tree carries the identical code.
