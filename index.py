@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""Test driver server for the ARTISY AI receptionist service — VERCEL version.
+"""Test driver server for the ARTISY AI receptionist service —
+PYTHONANYWHERE version.
 
-Rebuilt from the Space driver (``space-build/space/server.py``) for a
-Vercel deployment (samanlott / team zigg1), so invited affiliates can
-test Luna on a public link. The redesign (HOST-ASSESSMENT-NOV7.md):
+Rebuilt from the Vercel driver (``../vercel-driver/index.py``) for a
+PythonAnywhere deployment (free Beginner account, tinglott), so invited
+affiliates can test Luna on a public link that installs on their phone
+like the Willow app. The redesign:
 
-  * Calendar: NO relay. ``agent-service/calendar_booking.py`` calls the
-    Google Calendar API directly with a service-account key from the
-    ``GOOGLE_SERVICE_ACCOUNT_JSON`` env var (Ting pastes it in the
-    Vercel dashboard himself) on the test calendar in ``CALENDAR_ID``.
+  * Calendar: NO service account, NO key file. ``agent-service/
+    calendar_booking.py`` calls the Google Calendar API with the
+    Google account that signed in through the app's own /authorize
+    flow (Google OAuth 2.0, offline access): the refresh token lives
+    server-side in Upstash KV (``luna:google_oauth``), put there when
+    Ting taps Allow once. See ``agent-service/google_oauth.py``.
   * TTS: NO Kokoro sidecar. ``groq_tts.py`` synthesizes with Groq
     Canopy Orpheus (voice ``hannah``) and returns a base64 data URI
     in the turn JSON (``audio_data``); the browser plays it from
@@ -16,17 +20,20 @@ test Luna on a public link. The redesign (HOST-ASSESSMENT-NOV7.md):
     build; the test validates the call flow, not the real voice.**
   * State: NO process memory, NO local disk. Sessions, queues, the
     do-not-call list, the tester log and the activity log all live in
-    Upstash Redis via ``kvstore.py`` (REST). A Vercel function is
-    stateless and may scale to many instances — anything kept in
-    memory would 404 across instances and leak bookings.
+    Upstash Redis via ``kvstore.py`` (REST). A PythonAnywhere worker
+    is long-lived but reloads on code changes — anything kept in
+    memory would vanish on reload and leak bookings.
+  * Phone install: the app is a PWA modelled on Willow Tales
+    (``manifest.json`` + ``sw.js`` served from the root, standalone
+    display). Open the link, Chrome menu -> Install app.
   * No stub server: ``post_call_end`` writes the call-end payload to
     the KV activity log instead (and returns 201, as the stub did).
   * No relay routes, no /audio/<name> route, no sidecar startup.
 
-Layout (Vercel Flask framework preset — auto-detected from
-``requirements.txt``): this file is the entrypoint (``index.py`` at
-the project root, top-level ``app = Flask(__name__)``). No vercel.json
-rewrite is needed. Python 3.12 (``.python-version``).
+Layout (PythonAnywhere manual web app): this file is the entrypoint
+(``index.py`` at the project root, top-level ``app = Flask(__name__)``);
+the WSGI file (``pythonanywhere_wsgi.py``) imports ``app`` from it.
+Python 3.12. Env vars are set in the Web tab (see DEPLOY.md).
 
 Disclosure, first, always: every test call opens with the AI identity
 (the role config greeting) and every test call-back opens with the
@@ -55,7 +62,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, redirect, request, send_file
 
 HERE = Path(__file__).resolve().parent
 AGENT_SERVICE = HERE / "agent-service"
@@ -79,6 +86,10 @@ from callback_queue import (  # noqa: E402
 from groq_tts import synthesize_data_uri  # noqa: E402
 from groq_whisper import transcribe_file  # noqa: E402
 from kvstore import StoreUnavailable, get_store  # noqa: E402
+from google_oauth import (  # noqa: E402
+    OAuthConfigError, OAuthFlowError, authorization_url, calendar_connected,
+    exchange_code,
+)
 from role_loader import load_role_config  # noqa: E402
 from walkin_queue import add_walkin, queue_status, serve_next  # noqa: E402
 from approval_queue import all_items, approve, deny, pending_items  # noqa: E402
@@ -223,8 +234,8 @@ def _tts(text: str) -> str | None:
 
 def _save_audio_file(file_storage) -> tuple[str | None, str | None]:
     """Save an uploaded audio file to /tmp -> (path, error).
-    /tmp is the only writable disk on a Vercel function (512 MB);
-    the file is transcribed in-process and unlinked immediately."""
+    /tmp is writable scratch space on PythonAnywhere; the file is
+    transcribed in-process and unlinked immediately."""
     if file_storage is None:
         return None, "no audio file"
     data = file_storage.read()
@@ -258,7 +269,7 @@ def _save_session(record: dict) -> None:
     to delete their bookings — see _purge_expired_sessions). The
     CallSession object is serialized; the config is reloaded on load.
     Every endpoint that mutates a session MUST call this before
-    returning — a Vercel function keeps nothing between requests."""
+    returning — a worker keeps nothing between reloads."""
     store = get_store()
     session: CallSession = record["session"]
     stored = {
@@ -519,10 +530,109 @@ def health():
         "tts_worker": bool(os.environ.get("GROQ_API_KEY")),
         "tts_mode": "groq-orhpheus",
         "whisper_helper": True,
+        "calendar_connected": calendar_connected(),
         "activity_log": bool(status.get("configured")),
         "sessions_active": sessions_active,
         "server_time": datetime.now(TZ).isoformat(),
     })
+
+
+# ------------------------------------------------------- PWA (Willow model)
+@app.get("/manifest.json")
+def manifest():
+    """Web app manifest — served from the root so the app installs
+    on a phone like Willow (standalone, home-screen icon)."""
+    return send_file(HERE / "manifest.json",
+                     mimetype="application/manifest+json")
+
+
+@app.get("/sw.js")
+def service_worker():
+    """Service worker — served from the root (root scope matters).
+    Never cached itself: Cache-Control: no-cache, so an updated
+    worker is picked up on the next visit."""
+    resp = send_file(HERE / "sw.js", mimetype="application/javascript")
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
+
+
+@app.get("/icon-192.png")
+def icon_192():
+    return send_file(HERE / "icon-192.png", mimetype="image/png")
+
+
+@app.get("/icon-512.png")
+def icon_512():
+    return send_file(HERE / "icon-512.png", mimetype="image/png")
+
+
+# ------------------------------------------------- Google sign-in (OAuth)
+def _oauth_result_page(ok: bool, message: str) -> tuple[str, int]:
+    """Small result page after the Google sign-in flow (plain HTML in
+    the ARTISY palette — no session, no booking, nothing recorded)."""
+    title = "Calendar connected ✓" if ok else "Calendar not connected"
+    body = (f"<p>{message}</p>" if ok else
+            f"<p>Nothing was connected. {message}</p>")
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARTISY AI Receptionist — {title}</title>
+<style>body{{margin:0;font-family:system-ui,sans-serif;background:#0a0e1a;color:#eef1f8}}
+.wrap{{max-width:640px;margin:0 auto;padding:40px 20px;line-height:1.6}}
+h1{{color:#f5c451;font-size:1.3rem}}.card{{background:#151d36;border:1px solid #26305a;border-radius:10px;padding:16px}}
+a{{color:#7fd4ff}}</style>
+</head><body><div class="wrap"><h1>🤖 ARTISY AI Receptionist</h1>
+<div class="card"><h2>{title}</h2>{body}
+<p><a href="/">← Back to the test driver</a></p></div>
+</div></body></html>""", 200
+
+
+@app.get("/authorize")
+def authorize():
+    """Start Google sign-in (Ting, once). NOT tester-gated: the OAuth
+    client only lets the calendar owner's account complete it — the
+    callback verifies the id_token email before storing anything, so
+    a tester signing in with their own account is refused, never
+    stored."""
+    redirect_uri = request.url_root.rstrip("/") + "/oauth2callback"
+    try:
+        auth_url, _state = authorization_url(redirect_uri)
+    except (OAuthConfigError, OAuthFlowError) as exc:
+        return _oauth_result_page(False, str(exc))
+    return redirect(auth_url, code=302)
+
+
+@app.get("/oauth2callback")
+def oauth2callback():
+    """Google redirects here after Allow (or Deny). Verifies state,
+    exchanges the code, verifies the account, stores the refresh
+    token — then back to the driver page with a connected banner."""
+    if request.args.get("error"):
+        return _oauth_result_page(
+            False, "Google sign-in was declined or failed: "
+                   + request.args.get("error", ""))
+    code = request.args.get("code") or ""
+    state = request.args.get("state") or ""
+    if not code or not state:
+        return _oauth_result_page(
+            False, "Google did not return a sign-in code — try again "
+                   "from the app.")
+    redirect_uri = request.url_root.rstrip("/") + "/oauth2callback"
+    try:
+        record = exchange_code(redirect_uri, code, state)
+    except (OAuthConfigError, OAuthFlowError) as exc:
+        return _oauth_result_page(False, str(exc))
+    log_event("owner", "", "calendar_connected",
+              {"email": record.get("email")}, "connected")
+    return redirect("/?calendar=connected", code=302)
+
+
+@app.get("/api/calendar/status")
+def calendar_status():
+    """Whether a Google Calendar grant is stored (tester-gated like
+    every other /api/ route). The driver page uses this to show
+    Connect Google Calendar or Calendar connected ✓."""
+    return jsonify({"connected": calendar_connected()})
 
 
 # --------------------------------------------------------------- sessions
@@ -624,7 +734,7 @@ def session_turn():
     # Booking intent in the caller's words -> pending slot (needs confirm).
     slot, parse_reason = parse_booking_intent(text, session.config)
     if slot:
-        # VERCEL: the slot also carries "start"/"end" as datetime objects
+        # NOTE: the slot also carries "start"/"end" as datetime objects
         # — the bench kept them in process memory, but this record is
         # JSON-serialized into KV, and datetimes are not JSON-safe. Keep
         # only the ISO strings (everything downstream uses start_iso /
@@ -1014,7 +1124,7 @@ def test_reset():
     AND the matching X-Test-Reset-Key header. When the env var is
     unset (the default on a public deployment) this endpoint 404s —
     nobody can wipe the test state from the outside. The key is set
-    in the Vercel dashboard, never in the repo."""
+    in the host env vars, never in the repo."""
     key = os.environ.get("LUNA_TEST_RESET_KEY", "")
     if not key or request.headers.get("X-Test-Reset-Key") != key:
         return jsonify({"error": "not found"}), 404
@@ -1029,9 +1139,9 @@ def test_reset():
 
 # ------------------------------------------------------------------ main
 if __name__ == "__main__":
-    # Local runs only (Vercel imports `app` directly). Memory backend
+    # Local runs only (the WSGI file imports `app` directly). Memory backend
     # unless UPSTASH/KV env is set; GROQ_API_KEY from the environment.
-    print(f"Luna test driver (Vercel build) listening on http://{HOST}:{PORT}", flush=True)
+    print(f"Luna test driver (PythonAnywhere build) listening on http://{HOST}:{PORT}", flush=True)
     print(f"Store backend: {get_store().backend_name} "
           f"(configured={get_store().status().get('configured')})", flush=True)
     print("Voice: Groq Orpheus 'hannah' — NOT Kokoro af_heart (see index.py header)", flush=True)

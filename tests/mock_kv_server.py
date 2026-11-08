@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Mock Upstash Redis REST server — local test double for kvstore.py's
-REST backend (the backend a Vercel deployment uses).
+REST backend (the backend a PythonAnywhere deployment uses).
 
 Implements the Upstash REST command shape the driver uses: POST /
 with a JSON command array body (["GET", key], ["SET", key, value,

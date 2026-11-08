@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0e1a">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>ARTISY AI Receptionist — Test Driver</title>
 <style>
   :root { --navy:#0a0e1a; --card:#151d36; --white:#eef1f8; --gold:#f5c451; --sky:#7fd4ff; --mist:#9aa3c0; }
@@ -46,6 +49,13 @@
     Every test call opens by saying it is AI. Every test call-back opens with:
     <i>“Hi, this is the AI receptionist for Test Dental Practice, returning your call about [your reason]. Say stop at any time and we will never call you again.”</i>
     Say <b>“stop”</b> at any time and it will end the call and never call you again.
+  </div>
+
+  <div class="card" id="calCard">
+    <h2 style="margin-top:0">0 · Google Calendar</h2>
+    <p id="calStatus" class="small">Checking calendar connection…</p>
+    <p class="small">Bookings go to the test calendar. The calendar is connected once, by the owner, with one tap on Google's sign-in — testers never sign in and never paste anything.</p>
+    <a id="calConnectBtn" href="/authorize" style="display:none"><button>Connect Google Calendar</button></a>
   </div>
 
   <div class="card">
@@ -165,7 +175,7 @@ async function api(path, body, method) {
   return data;
 }
 function playAudio(url) {
-  // Vercel build: url is a data:audio/wav;base64,... URI from the
+  // PythonAnywhere build: url is a data:audio/wav;base64,... URI from the
   // turn JSON (Groq Orpheus) — played from memory, no /audio route.
   if (!url) return;
   if (audioEl) { audioEl.pause(); }
@@ -370,6 +380,33 @@ $('feedbackBtn').onclick = async () => {
   } catch (e) { $('feedbackState').textContent = 'Could not log feedback: ' + e.message; }
 };
 
+// Calendar connection status + installable-app (PWA) setup.
+async function refreshCalendarStatus() {
+  const params = new URLSearchParams(location.search);
+  const el = $('calStatus'), btn = $('calConnectBtn');
+  if (params.get('calendar') === 'connected') {
+    el.innerHTML = '<b class="ok">Calendar connected ✓</b> — bookings will go to the test calendar.';
+    btn.style.display = 'none';
+    return;
+  }
+  try {
+    const data = await api('/api/calendar/status', null, 'GET');
+    if (data.connected) {
+      el.innerHTML = '<b class="ok">Calendar connected ✓</b> — bookings will go to the test calendar.';
+      btn.style.display = 'none';
+    } else {
+      el.innerHTML = '<b class="bad">Calendar not connected yet.</b> The owner connects it once with one tap — testers do not need to do anything.';
+      btn.style.display = '';
+    }
+  } catch (e) { el.textContent = 'Calendar status unavailable: ' + e.message; }
+}
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* offline support is a bonus, not a requirement */ });
+  });
+}
+
+refreshCalendarStatus();
 refreshWalkins(); refreshApprovals();
 </script>
 </body>

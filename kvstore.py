@@ -1,31 +1,33 @@
-"""Key-value store for the Vercel driver — sessions, queues, logs, rate limits.
+"""Key-value store for the PythonAnywhere driver — sessions, queues, logs,
+rate limits.
 
 The bench/Space driver keeps all of this in process memory or on local
-disk (``sessions`` dict, ``_req_log``, JSONL queue files). A Vercel
-function has neither: instances are stateless, scale to many, and lose
-local disk between invocations. Everything stateful therefore lives in
-an external store, behind this one small interface:
+disk (``sessions`` dict, ``_req_log``, JSONL queue files). A hosted
+worker must not rely on either: processes reload on deploy and lose
+local disk between runs. Everything stateful therefore lives in an
+external store, behind this one small interface:
 
   get(key) / set(key, value, ex=None) / delete(key) / incr(key, ex=None)
   get_json(key) / set_json(key, value, ex=None)
   list_get(key) / list_set(key, items) / list_append(key, item, max_len)
 
 Backends (chosen at first use, from env):
-  * "rest"   — Upstash Redis via its REST API (Vercel KV is retired;
-               new projects install Redis from the Marketplace).
+  * "rest"   — Upstash Redis via its REST API (host-independent; the
+               same store the Vercel deployment uses).
                Active when UPSTASH_REDIS_REST_URL +
-               UPSTASH_REDIS_REST_TOKEN are set (what the Upstash
-               integration injects), or the legacy KV_REST_API_URL /
-               KV_REST_API_TOKEN on migrated stores. One POST per
-               command, JSON command array body, bearer token. No
-               persistent connection, no extra dependency (plain
-               ``requests``).
+               UPSTASH_REDIS_REST_TOKEN are set, or the legacy
+               KV_REST_API_URL / KV_REST_API_TOKEN on migrated stores.
+               One POST per command, JSON command array body, bearer
+               token. No persistent connection, no extra dependency
+               (plain ``requests``).
   * "memory" — in-process dict with per-key expiry. Local testing only.
-               Active when no KV env is set AND we are not on Vercel.
-  * "missing"— on Vercel (VERCEL=1) with no KV env: every operation
+               Active when no KV env is set AND the deployment does
+               not require a store (LUNA_REQUIRE_STORE unset).
+  * "missing"— on a deployment with no KV env (VERCEL=1, or
+               LUNA_REQUIRE_STORE=1 on PythonAnywhere): every operation
                raises StoreUnavailable. A public deployment must never
-               silently run on per-instance memory (sessions would 404
-               across instances and bookings would leak) — it fails
+               silently run on per-instance memory (sessions would
+               vanish on reload and bookings would leak) — it fails
                closed instead, and /health reports store_ok:false.
 
 Race note: list operations are read-modify-write of one JSON value.
@@ -65,7 +67,7 @@ def _rest_env() -> tuple[str, str] | None:
 def _backend_name() -> str:
     if _rest_env():
         return "rest"
-    if os.environ.get("VERCEL"):
+    if os.environ.get("VERCEL") or os.environ.get("LUNA_REQUIRE_STORE"):
         return "missing"
     return "memory"
 
@@ -75,7 +77,11 @@ class _MemoryBackend:
 
     def __init__(self) -> None:
         self._data: dict[str, tuple[str, float | None]] = {}
-        self._lock = threading.Lock()
+        # RLock, not Lock: incr() calls get()/set() while holding the
+        # lock. A plain Lock deadlocks there forever (found Nov 7 by
+        # the bench test-client suite — the first rate-limited /api/
+        # call hung with no error and no timeout).
+        self._lock = threading.RLock()
 
     def get(self, key: str) -> str | None:
         with self._lock:
@@ -163,8 +169,8 @@ class _MissingBackend:
     def get(self, key: str):
         raise StoreUnavailable(
             "Upstash Redis is not provisioned on this deployment — sessions, "
-            "queues and logs have nowhere to live. Install Redis from the "
-            "Vercel Marketplace (one click) and redeploy."
+            "queues and logs have nowhere to live. Set the Upstash REST "
+            "env vars on the host (see DEPLOY.md) and reload the web app."
         )
 
     def set(self, key: str, value: str, ex: int | None = None):

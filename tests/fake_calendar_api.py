@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Fake Google Calendar API server — local test double for the Vercel
+"""Fake Google Calendar API server — local test double for the PythonAnywhere
 calendar_booking.py module (service-account, direct Calendar API).
 
-Why: the Vercel build calls the real googleapiclient library against
+Why: the PythonAnywhere build calls the real googleapiclient library against
 the real Google API shape, but local testing has no service account
 (Ting's taps come later). This server proves the request/response code
 path end-to-end with the REAL client library: discovery-doc fetch,

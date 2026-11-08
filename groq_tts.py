@@ -1,7 +1,7 @@
-"""Groq text-to-speech — Canopy Orpheus (Vercel build).
+"""Groq text-to-speech — Canopy Orpheus (PythonAnywhere build).
 
 Replaces the Kokoro sidecar. The bench driver synthesizes with a local
-Kokoro worker; a Vercel function cannot run torch, so speech comes from
+Kokoro worker; a hosted worker cannot run torch, so speech comes from
 Groq's ``/audio/speech`` endpoint instead. **The voice CHANGES: Kokoro
 ``af_heart`` is gone in this build.** The test voice is Orpheus
 ``hannah`` (female) — a different voice from the production one, so
@@ -13,7 +13,7 @@ text-to-speech/orpheus, /text-to-speech, /rate-limits, /models):
   * Endpoint: POST https://api.groq.com/openai/v1/audio/speech
     (OpenAI-compatible). Body: {"model", "input", "voice",
     "response_format": "wav"}. Key from GROQ_API_KEY env (Ting pastes
-    it in the Vercel dashboard himself).
+    it in the host env vars).
   * Model: ``canopylabs/orpheus-v1-english``. English voices: autumn,
     diana, hannah (female); austin, daniel, troy (male).
   * **200 characters max per request** — long text is sentence-chunked
@@ -36,9 +36,9 @@ text-to-speech/orpheus, /text-to-speech, /rate-limits, /models):
     hard-codes a sample rate. Naive byte-concatenation of whole WAV
     files would produce a corrupt file (each chunk carries its own
     header), so headers are stripped and only PCM is joined.
-  * Vercel response-size guard: a function response is capped at
-    4.5 MB. Audio is returned as a base64 data URI inside the turn
-    JSON, so a very long reply could breach it. Synthesis is capped
+  * Response-size guard: audio is returned as a base64 data URI inside
+    the turn JSON, so a very long reply would make a huge response.
+    Synthesis is capped
     at MAX_CHUNKS chunks (800 chars ≈ 60–80 s of speech); the TEXT
     reply is unaffected — only the audio is capped. The test driver's
     replies are short (greetings, lookups, confirmations), so the cap
@@ -111,7 +111,8 @@ def _synthesize_chunk(text: str, api_key: str) -> bytes | None:
                     # Cloudflare in front of api.groq.com bans the
                     # default Python-requests signature (error 1010);
                     # a plain app UA passes (same as brain.py).
-                    "User-Agent": "Mozilla/5.0 (compatible; ARTISY-FreeStack/1.0)",
+                    # Plain browser UA: Cloudflare 1010-blocks custom UAs on the bench egress proxy (Nov 7).
+                    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
                 },
                 timeout=60,
             )

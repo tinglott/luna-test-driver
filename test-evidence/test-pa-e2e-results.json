@@ -1,0 +1,290 @@
+{
+  "run_at": "2026-11-07T19:28:42.916718-05:00",
+  "base": "http://127.0.0.1:18102",
+  "calendar_id": "test-calendar",
+  "reset_ok": true,
+  "total": 44,
+  "passed": 40,
+  "failed": 0,
+  "blocked": 4,
+  "overall": "BLOCKED",
+  "checks": [
+    {
+      "name": "health_green",
+      "ok": true,
+      "blocked": false,
+      "detail": "tts=True whisper=True store={'backend': 'rest', 'configured': True}"
+    },
+    {
+      "name": "inbound_greeting_discloses_ai",
+      "ok": true,
+      "blocked": false,
+      "detail": "Hello, thanks for calling Test Dental Practice. I'm Aria, the AI receptionist \u2014 how can I help?"
+    },
+    {
+      "name": "greeting_tts_wav_nonempty",
+      "ok": false,
+      "blocked": true,
+      "detail": "no audio_data \u2014 Groq Orpheus unavailable (model_terms_required until Ting accepts the Orpheus terms in the Groq console)"
+    },
+    {
+      "name": "price_lookup_typed_verbatim",
+      "ok": true,
+      "blocked": false,
+      "detail": "'A check-up is $45.'"
+    },
+    {
+      "name": "price_lookup_stt_style_verbatim",
+      "ok": true,
+      "blocked": false,
+      "detail": "'A check-up is $45.' (FIX #2: hyphen-insensitive lookup)"
+    },
+    {
+      "name": "unknown_question_honest_no_invention",
+      "ok": true,
+      "blocked": false,
+      "detail": "'I\u2019m sorry, I don\u2019t have information about that. Would you like me to take your details for a callback?'"
+    },
+    {
+      "name": "crisis_gate_911_and_988",
+      "ok": true,
+      "blocked": false,
+      "detail": "action=escalate_crisis reply=If you are in immediate danger, please call 911 now. You can also call or text 988 \u2014 the S"
+    },
+    {
+      "name": "money_gate_escalates",
+      "ok": true,
+      "blocked": false,
+      "detail": "action=escalate reply=That's something the practice handles directly \u2014 let me take your details and they will ca"
+    },
+    {
+      "name": "medical_gate_escalates",
+      "ok": true,
+      "blocked": false,
+      "detail": "action=escalate reply=I can't give medical advice \u2014 let me take your details and the practice will call you back"
+    },
+    {
+      "name": "booking_intent_parsed",
+      "ok": true,
+      "blocked": false,
+      "detail": "{\"end_iso\": \"2026-11-09T10:30:00-05:00\", \"service\": \"Check-up\", \"start_iso\": \"2026-11-09T10:00:00-05:00\"}"
+    },
+    {
+      "name": "booking_confirmed_real_event",
+      "ok": true,
+      "blocked": false,
+      "detail": "event=evt-e2a70b88b2c84efd"
+    },
+    {
+      "name": "booking_read_back_in_calendar",
+      "ok": true,
+      "blocked": false,
+      "detail": "TEST \u2014 AI Receptionist prototype booking: Check-up (Test Dental Practice (prototype test \u2014 not a real business))"
+    },
+    {
+      "name": "session_end_reports_verified_delete",
+      "ok": true,
+      "blocked": false,
+      "detail": "deleted=['evt-e2a70b88b2c84efd'] failures=[]"
+    },
+    {
+      "name": "booking_actually_gone_after_end",
+      "ok": true,
+      "blocked": false,
+      "detail": "gone"
+    },
+    {
+      "name": "call_end_payload_booked_schema",
+      "ok": true,
+      "blocked": false,
+      "detail": "outcome=booked"
+    },
+    {
+      "name": "call_end_posted_201",
+      "ok": true,
+      "blocked": false,
+      "detail": "post_status=201 (KV activity log, not the stub)"
+    },
+    {
+      "name": "owner_summary_has_caller_outcome",
+      "ok": true,
+      "blocked": false,
+      "detail": "New booking \u2014 Battery Tester"
+    },
+    {
+      "name": "opt_out_closes_call",
+      "ok": true,
+      "blocked": false,
+      "detail": "action=opt_out reply=Understood \u2014 I won't call you again. Goodbye."
+    },
+    {
+      "name": "opt_out_writes_dnc",
+      "ok": true,
+      "blocked": false,
+      "detail": "opted-out number suppressed on sweep, actions=['suppressed']"
+    },
+    {
+      "name": "callback_request_stores_reason",
+      "ok": true,
+      "blocked": false,
+      "detail": "cb-0002"
+    },
+    {
+      "name": "callback_sweep_dials_in_window",
+      "ok": true,
+      "blocked": false,
+      "detail": "Hi, this is the AI receptionist for Test Dental Practice (prototype test \u2014 not a real business), returning your call about a check"
+    },
+    {
+      "name": "callback_greeting_part_a_verbatim",
+      "ok": true,
+      "blocked": false,
+      "detail": "Hi, this is the AI receptionist for Test Dental Practice (prototype test \u2014 not a real business), returning your call about a check"
+    },
+    {
+      "name": "callback_stop_opts_out",
+      "ok": true,
+      "blocked": false,
+      "detail": "action=opt_out"
+    },
+    {
+      "name": "callback_dnc_suppresses",
+      "ok": true,
+      "blocked": false,
+      "detail": "actions=['suppressed']"
+    },
+    {
+      "name": "callback_late_night_deferred",
+      "ok": true,
+      "blocked": false,
+      "detail": "actions=['deferred']"
+    },
+    {
+      "name": "calling_window_unit_2130_outside",
+      "ok": true,
+      "blocked": false,
+      "detail": ""
+    },
+    {
+      "name": "calling_window_next_is_next_8am",
+      "ok": true,
+      "blocked": false,
+      "detail": "2026-11-10T08:00:00-05:00"
+    },
+    {
+      "name": "sales_call_qualifies_and_sets_followup",
+      "ok": true,
+      "blocked": false,
+      "detail": "qualified=True due=2026-11-09T10:00:00-05:00"
+    },
+    {
+      "name": "sales_summary_subject_is_lead",
+      "ok": true,
+      "blocked": false,
+      "detail": "Sales lead \u2014 Battery Tester"
+    },
+    {
+      "name": "front_desk_price_never_qualifies",
+      "ok": true,
+      "blocked": false,
+      "detail": "qualified=False"
+    },
+    {
+      "name": "new_caller_booking_parsed",
+      "ok": true,
+      "blocked": false,
+      "detail": "{\"end_iso\": \"2026-11-09T10:30:00-05:00\", \"service\": \"Check-up\", \"start_iso\": \"2026-11-09T10:00:00-05:00\"}"
+    },
+    {
+      "name": "new_caller_booking_held_for_owner",
+      "ok": {
+        "booking_event_id": null,
+        "calendar_id": "primary",
+        "call_id": "call-f691972ed4f3",
+        "caller_name": "New Caller",
+        "caller_phone": "+1 555 010 0007",
+        "client_id": "test-client-approval",
+        "decided_by": null,
+        "end": "2026-11-09T10:30:00-05:00",
+        "id": "appr-0001",
+        "service": "Check-up",
+        "start": "2026-11-09T10:00:00-05:00",
+        "status": "pending"
+      },
+      "blocked": false,
+      "detail": "action=pending_approval"
+    },
+    {
+      "name": "approval_item_has_no_calendar_write",
+      "ok": true,
+      "blocked": false,
+      "detail": "{\"booking_event_id\": null, \"calendar_id\": \"primary\", \"call_id\": \"call-f691972ed4f3\", \"caller_name\": \"New Caller\", \"caller_phone\": \"+1 555 010 0007\", \"client_id\""
+    },
+    {
+      "name": "approval_approve_writes_real_event",
+      "ok": true,
+      "blocked": false,
+      "detail": "event=evt-1358fb6997974861"
+    },
+    {
+      "name": "approved_event_read_back",
+      "ok": true,
+      "blocked": false,
+      "detail": "TEST \u2014 AI Receptionist prototype booking: Check-up (test-client-approval)"
+    },
+    {
+      "name": "approval_deny_records_no_event",
+      "ok": true,
+      "blocked": false,
+      "detail": "{\"booking_event_id\": null, \"calendar_id\": \"primary\", \"call_id\": \"call-2f7a641e04a4\", \"caller_name\": \"Second New Caller\","
+    },
+    {
+      "name": "walkin_waits_15_and_30",
+      "ok": true,
+      "blocked": false,
+      "detail": "15/30 min"
+    },
+    {
+      "name": "walkin_serve_recomputes",
+      "ok": true,
+      "blocked": false,
+      "detail": "served=Walk-in One remaining=[{'estimated_wait_minutes': 15, 'id': 'walk-0002', 'name': 'Walk-in Two', 'position': 1, 'service': 'Hygiene appointment', 'slot_minutes': 15, 'status': 'waiting'}]"
+    },
+    {
+      "name": "stt_roundtrip_transcribes",
+      "ok": false,
+      "blocked": true,
+      "detail": "Groq Orpheus unavailable (model_terms_required until Ting accepts the Orpheus terms in the Groq console) \u2014 no speech to transcribe"
+    },
+    {
+      "name": "invalid_config_driver_refuses",
+      "ok": true,
+      "blocked": false,
+      "detail": "POST /api/session/start -> 500: {'error': 'refusing to start: greeting does not disclose the AI'}"
+    },
+    {
+      "name": "invalid_config_message_taking_only",
+      "ok": true,
+      "blocked": false,
+      "detail": "valid=False reply=I don't have that answer \u2014 let me take your details and the practice will call y"
+    },
+    {
+      "name": "twilio_bridge_25_of_25",
+      "ok": true,
+      "blocked": false,
+      "detail": "Overall: PASS \u2014 25/25 checks"
+    },
+    {
+      "name": "tts_audio_to_mulaw_8k",
+      "ok": false,
+      "blocked": true,
+      "detail": "no greeting audio (Groq Orpheus unavailable) \u2014 nothing to encode"
+    },
+    {
+      "name": "mulaw_decode_wav_readable",
+      "ok": false,
+      "blocked": true,
+      "detail": "no mu-law bytes (blocked above)"
+    }
+  ]
+}
