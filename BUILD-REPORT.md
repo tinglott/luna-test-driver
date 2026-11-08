@@ -133,3 +133,32 @@ response-size guard note, restored (the PA copy had dropped it).
 6. **After OAuth is verified working on BOTH hosts**: delete BOTH
    service-account keys (`8e534b066af5`, `b674f2078718`). The Vercel
    deployment stays live throughout.
+
+---
+
+## Addendum — CORS + W3/W4 routes (Nov 7, evening, dual-host phases 2–3)
+
+- **CORS for GitHub Pages**: `ALLOWED_CORS_ORIGINS = {"https://tinglott.github.io"}`,
+  `@app.after_request` grants that origin only (GET/POST/OPTIONS,
+  headers Content-Type + X-Tester); OPTIONS preflights bypass the
+  tester gate and the rate limiter (browsers send no tester header on
+  a preflight). The tester gate still applies to every real `/api/`
+  call — the Pages frontend only passes the tester name through.
+  Bench-verified: preflight from the Pages origin returns the grant,
+  a stranger origin gets none, a real call from the Pages origin works.
+- **W3 `/api/report/monthly`** (GET, tester-gated): compiles the month
+  from the KV activity log exactly like the W3 Code node (calls,
+  bookings, messages, spam, minutes vs the 225-minute template
+  allowance); `?month=YYYY-MM`, default prior month. Returns the DRAFT
+  (nothing emailed — the Gmail send step is not in this test driver).
+- **W4 `/api/heartbeat`** (POST, tester-gated): writes a heartbeat row
+  to the KV activity log and reports service-up + Monday
+  forwarding-check-day. Gmail alert/reminder steps are not in this
+  test driver — a down service is reported, not emailed.
+- **created_at stamp**: `_post_call_end` and the callback sweep's
+  `post_log` stamp every activity-log row with `created_at` (W1's
+  Supabase shape — the W3 filter needs it). Rows written before the
+  stamp are counted as "undated" and excluded from month totals.
+- Bench: test-client suite still **37/37**; CORS + W3/W4 ad-hoc checks
+  **10/10** (the ad-hoc script's counter reads 13/8 — a counting bug
+  in the throwaway script, not the app; every check printed PASS).

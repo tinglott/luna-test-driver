@@ -192,6 +192,11 @@ def _client_ip() -> str:
 
 @app.before_request
 def _tester_gate():
+    # CORS preflight: browsers send no tester header on OPTIONS —
+    # let it through; the route's automatic OPTIONS reply answers it
+    # and _cors_headers() adds the grant.
+    if request.method == "OPTIONS":
+        return None
     # /health is public (it reports store/TTS status only).
     if request.path == "/health":
         return None
@@ -209,6 +214,9 @@ def _tester_gate():
 
 @app.before_request
 def _rate_limit():
+    # CORS preflight is not a real API call — never rate-limit it.
+    if request.method == "OPTIONS":
+        return None
     if not request.path.startswith("/api/"):
         return None
     ip = _client_ip()
@@ -220,6 +228,29 @@ def _rate_limit():
     if count > MAX_REQUESTS_PER_IP_PER_MINUTE:
         return jsonify({"error": "rate limited — try again in a minute"}), 429
     return None
+
+
+# ------------------------------------------------------- CORS (GitHub Pages)
+# The per-feature Pages frontend (https://tinglott.github.io/...) calls
+# this backend cross-origin. Only that origin is allowed; the tester
+# gate still applies to every /api/ call (the pages pass the tester
+# name through — no gate logic lives in the pages alone).
+ALLOWED_CORS_ORIGINS = {"https://tinglott.github.io"}
+
+
+@app.after_request
+def _cors_headers(response):
+    """Grant the GitHub Pages frontend cross-origin access. Only the
+    Pages origin gets the header — any other origin gets no CORS grant
+    (the browser then blocks the read, as it should)."""
+    origin = request.headers.get("Origin", "")
+    if origin in ALLOWED_CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Tester"
+        response.headers["Access-Control-Max-Age"] = "86400"
+    return response
 
 
 # ---------------------------------------------------------------- helpers
@@ -391,9 +422,13 @@ def _post_call_end(payload: dict) -> tuple[int, str]:
     sweep's rebooked_check reads. Returns (201, "logged") on success
     — the same status the stub returned, so the battery's assertion
     holds. On store failure returns (503, ...) and the caller reports
-    it honestly instead of claiming the payload was posted."""
+    it honestly instead of claiming the payload was posted.
+
+    The row is stamped with created_at (W1's Supabase shape — the W3
+    monthly report filters on it)."""
     try:
         store = get_store()
+        payload.setdefault("created_at", datetime.now(TZ).isoformat())
         store.list_append(ACTIVITY_LOG_KEY, payload, max_len=1000)
         store.list_append(CALL_END_LOG_KEY, payload, max_len=1000)
     except StoreUnavailable as exc:
@@ -1022,6 +1057,8 @@ def callback_sweep():
 
     def post_log(payload: dict) -> None:
         try:
+            # Same created_at stamp as _post_call_end (W3 filters on it).
+            payload.setdefault("created_at", datetime.now(TZ).isoformat())
             get_store().list_append(ACTIVITY_LOG_KEY, payload, max_len=1000)
         except StoreUnavailable:
             pass
@@ -1118,6 +1155,123 @@ def feedback():
 
 
 # ------------------------------------------------------- test reset (guarded)
+# ------------------------------------------- W3 monthly report (live)
+@app.get("/api/report/monthly")
+def monthly_report():
+    """W3 Monthly Report — the COMPILE step, live (mirrors the W3 Code
+    node). Reads the KV activity log and compiles the month exactly
+    like the node: calls answered, bookings made, messages taken, spam
+    blocked, minutes used vs the 225-minute template allowance.
+    ?month=YYYY-MM selects the month; default is the prior month.
+    Returns the DRAFT — Ting reviews it before it goes anywhere. The
+    Gmail send step is NOT in this test driver; nothing is emailed.
+    Rows written before the created_at stamp exist are counted under
+    "undated" and excluded from the month totals, honestly."""
+    from datetime import date as _date
+
+    month_arg = (request.args.get("month") or "").strip()
+    now = datetime.now(TZ)
+    if month_arg:
+        try:
+            year, month = (int(p) for p in month_arg.split("-"))
+            if not (1 <= month <= 12):
+                raise ValueError
+        except ValueError:
+            return jsonify({"error": "month must be YYYY-MM"}), 400
+    else:
+        year, month = (now.year, now.month - 1) if now.month > 1 else (now.year - 1, 12)
+    start = datetime(year, month, 1, tzinfo=TZ)
+    end = datetime(year + (1 if month == 12 else 0), 1 if month == 12 else month + 1,
+                   1, tzinfo=TZ)
+    label = start.strftime("%B %Y")
+    try:
+        rows = get_store().list_get(ACTIVITY_LOG_KEY) or []
+    except StoreUnavailable:
+        return jsonify({"error": "session store unavailable — try again shortly"}), 503
+    month_rows, undated = [], 0
+    for row in rows:
+        items = row if isinstance(row, list) else [row]
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            if not (item.get("action") or "").startswith("call_"):
+                continue
+            created = item.get("created_at")
+            if not created:
+                undated += 1
+                continue
+            try:
+                ts = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+            except ValueError:
+                undated += 1
+                continue
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=TZ)
+            if start <= ts.astimezone(TZ) < end:
+                month_rows.append(item)
+    count = lambda outcome: sum(1 for r in month_rows if r.get("outcome") == outcome)
+    minutes = round(sum(r.get("duration_seconds") or 0 for r in month_rows) / 60)
+    bookings = ["- " + ((r.get("detail") or {}).get("caller_name") or "caller") + ": "
+                + ((r.get("detail") or {}).get("booking_or_message") or "")
+                for r in month_rows if r.get("outcome") == "booked"]
+    allowance = 225  # W3 template default; no per-client allowance is configured yet
+    subject = f"Monthly report (DRAFT for Ting review) — test-client — {label}"
+    body = "\n".join([
+        "DRAFT — Ting reviews this before it goes to the owner.", "",
+        f"AI Receptionist — monthly report for {label}",
+        "Client: test-client", "",
+        f"Calls answered: {len(month_rows)}",
+        f"Bookings made: {count('booked')}",
+        f"Messages taken: {count('message')}",
+        f"Spam blocked: {count('spam')}",
+        f"Minutes used: {minutes} of {allowance} included.", "",
+        "Bookings:", "\n".join(bookings) if bookings else "(none this month)", "",
+        "These are the calls that actually happened. Nothing here is a promise about next month.",
+    ])
+    return jsonify({"month": f"{year:04d}-{month:02d}", "label": label, "draft": True,
+                    "subject": subject, "body": body,
+                    "counts": {"calls_answered": len(month_rows),
+                               "bookings": count("booked"),
+                               "messages": count("message"),
+                               "spam_blocked": count("spam"),
+                               "undated_rows_excluded": undated},
+                    "minutes_used": minutes, "allowance_minutes": allowance,
+                    "bookings": bookings})
+
+
+# --------------------------------------------- W4 heartbeat (live)
+@app.post("/api/heartbeat")
+def heartbeat():
+    """W4 Monitoring + Heartbeat — the ROW + CHECK steps, live. Writes
+    a heartbeat row to the KV activity log (keeps the store warm, the
+    way the W4 node keeps the free Supabase project awake) and reports
+    whether the voice service is up (store + calendar status), plus
+    whether today is the Monday forwarding-check day. The Gmail alert
+    + reminder steps are NOT in this test driver — a down service is
+    reported here, not emailed."""
+    now = datetime.now(TZ)
+    try:
+        store = get_store()
+        status = store.status()
+        store_ok = bool(status.get("configured"))
+    except StoreUnavailable:
+        return jsonify({"ok": False, "error": "session store unavailable"}), 503
+    entry = {"employee_id": "aria", "action": "heartbeat",
+             "client_id": "__service__", "role_id": "front-desk",
+             "created_at": now.isoformat(),
+             "detail": {"check": "daily_heartbeat",
+                        "note": "keeps the store warm"}}
+    try:
+        store.list_append(ACTIVITY_LOG_KEY, entry, max_len=1000)
+    except StoreUnavailable:
+        return jsonify({"ok": False, "error": "session store unavailable"}), 503
+    return jsonify({"ok": store_ok,
+                    "store_ok": store_ok,
+                    "calendar_connected": calendar_connected(),
+                    "forwarding_check_due": now.weekday() == 0,
+                    "ts": now.isoformat()})
+
+
 @app.post("/api/test/reset")
 def test_reset():
     """Reset all test state (sessions, queues, DNC, logs) — bench
